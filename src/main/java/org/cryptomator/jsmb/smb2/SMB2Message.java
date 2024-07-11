@@ -1,5 +1,7 @@
 package org.cryptomator.jsmb.smb2;
 
+import org.cryptomator.jsmb.common.SMBMessage;
+
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
@@ -8,7 +10,7 @@ import java.nio.ByteBuffer;
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/fb188936-5050-48d3-b350-dc43059638a4">SMB2 Packet Header Specification</a>
  */
-public interface SMB2Message {
+public interface SMB2Message extends SMBMessage {
 
 	int PROTOCOL_ID = 0x424D53FE; // 0xFE S M B
 
@@ -28,14 +30,13 @@ public interface SMB2Message {
 
 	MemorySegment segment();
 
-	default ByteBuffer serialize() {
+	default byte[] serialize() {
 		var hBuf = header().segment().asByteBuffer();
 		var bBuf = segment().asByteBuffer();
 		ByteBuffer buffer = ByteBuffer.allocate(hBuf.remaining() + bBuf.remaining());
 		buffer.put(hBuf);
 		buffer.put(bBuf);
-		buffer.flip();
-		return buffer;
+		return buffer.array();
 	}
 
 }

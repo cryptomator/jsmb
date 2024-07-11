@@ -15,15 +15,6 @@ import java.util.UUID;
  */
 public record NegotiateRequest(PacketHeader header, MemorySegment segment) implements SMB2Message {
 
-	// TODO: move to own class
-	public interface Dialects {
-		short SMB2_0_2 = 0x0202;
-		short SMB2_1 = 0x0210;
-		short SMB3_0 = 0x0300;
-		short SMB3_0_2 = 0x0302;
-		short SMB3_1_1 = 0x0311;
-	}
-
 	public short structureSize() {
 		return segment.get(Layouts.LE_INT16, 0); // should always be 36, regardless of dialects and negotiate contexts
 	}

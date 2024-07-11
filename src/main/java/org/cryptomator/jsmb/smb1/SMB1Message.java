@@ -1,15 +1,17 @@
 package org.cryptomator.jsmb.smb1;
 
+import org.cryptomator.jsmb.common.SMBMessage;
 import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
 
 /**
  * A SMB 1 Message
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/4d330f4c-151c-4d79-b207-40bd4f754da9">SMB1 Message Structure</a>
  */
-public sealed interface SMB1Message permits SmbComNegotiateRequest {
+public sealed interface SMB1Message extends SMBMessage permits SmbComNegotiateRequest, SmbComNegotiateResponse {
 
 	int PROTOCOL_ID = 0x424D53FF; // 0xFF S M B
 
@@ -35,6 +37,13 @@ public sealed interface SMB1Message permits SmbComNegotiateRequest {
 	}
 
 	MemorySegment segment();
+
+	default byte[] serialize() {
+		var buf = segment().asByteBuffer();
+		var result = new byte[buf.remaining()];
+		buf.get(0, result);
+		return result;
+	}
 
 	default byte command() {
 		return segment().get(Layouts.BYTE, 4);

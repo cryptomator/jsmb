@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,9 +19,11 @@ public class TcpServer implements AutoCloseable {
 	private final ServerSocket serverSocket;
 	private final Thread acceptor;
 	public final UUID guid;
+	public final Instant startTime;
 
 	private TcpServer(ServerSocket serverSocket) {
 		this.guid = UUID.randomUUID();
+		this.startTime = Instant.now();
 		this.serverSocket = serverSocket;
 		this.acceptor = Thread.ofVirtual().name("TCP Connection Listener").uncaughtExceptionHandler(this::handleAcceptException).start(this::acceptConnections);
 	}
