@@ -1,6 +1,6 @@
 package org.cryptomator.jsmb.smb2;
 
-import org.cryptomator.jsmb.smb2.capabilities.NegotiateContext;
+import org.cryptomator.jsmb.smb2.negotiate.NegotiateContext;
 import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
@@ -79,6 +79,14 @@ public record NegotiateRequest(PacketHeader header, MemorySegment segment) imple
 			contextsSegment = contextsSegment.asSlice(ctx.segmentSize());
 		}
 		return result;
+	}
+
+	public <T extends NegotiateContext> T negotiateContext(Class<T> type) {
+		return negotiateContexts().stream()
+				.filter(type::isInstance)
+				.map(type::cast)
+				.findFirst()
+				.orElse(null);
 	}
 
 }

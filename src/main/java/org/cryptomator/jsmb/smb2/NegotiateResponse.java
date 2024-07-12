@@ -1,6 +1,6 @@
 package org.cryptomator.jsmb.smb2;
 
-import org.cryptomator.jsmb.smb2.capabilities.NegotiateContext;
+import org.cryptomator.jsmb.smb2.negotiate.NegotiateContext;
 import org.cryptomator.jsmb.util.Layouts;
 import org.cryptomator.jsmb.util.MemorySegments;
 
@@ -15,11 +15,6 @@ import java.util.UUID;
  */
 public record NegotiateResponse(PacketHeader header, MemorySegment segment) implements SMB2Message {
 
-	public interface SecurityMode {
-		short SIGNING_ENABLED = 0x0001;
-		short SIGNING_REQUIRED = 0x0002;
-	}
-
 	public static final short STRUCTURE_SIZE = 65;
 
 	public NegotiateResponse {
@@ -28,6 +23,10 @@ public record NegotiateResponse(PacketHeader header, MemorySegment segment) impl
 
 	public NegotiateResponse(PacketHeader header) {
 		this(header, MemorySegment.ofArray(new byte[STRUCTURE_SIZE]));
+		securityBufferOffset((short) (header.structureSize() + 64));
+		securityBufferLength((short) 0);
+		negotiateContextOffset(header.structureSize() + 64 + 0);
+		negotiateContextCount((short) 0);
 	}
 
 	public void securityMode(short securityMode) {
@@ -101,15 +100,20 @@ public record NegotiateResponse(PacketHeader header, MemorySegment segment) impl
 
 	public NegotiateResponse withNegotiateContexts(Set<NegotiateContext> contexts) {
 		// start of negotiate context is 8-byte-aligned
-		int endOfSecurityBuffer = 64 + securityBufferLength();
-		int padding = 8 - endOfSecurityBuffer % 8;
-		var contextsSegment = MemorySegment.ofArray(new byte[padding]);
+		int endOfSecurityBuffer = header.structureSize() + 64 + securityBufferLength();
+		int initialPadding = (8 - endOfSecurityBuffer % 8) % 8;
+		var contextsSegment = MemorySegment.ofArray(new byte[initialPadding]);
 		for (var context : contexts) {
 			contextsSegment = MemorySegments.concat(contextsSegment, context.segment());
+			// align next context to 8 bytes:
+			if (contextsSegment.byteSize() % 8 != 0) {
+				int intermediatePadding = (int) (8 - contextsSegment.byteSize() % 8) % 8;
+				contextsSegment = MemorySegments.concat(contextsSegment, MemorySegment.ofArray(new byte[intermediatePadding]));
+			}
 		}
 		var segmentWithContexts = MemorySegments.concat(segment, contextsSegment);
 		var updatedResponse = new NegotiateResponse(header, segmentWithContexts);
-		updatedResponse.negotiateContextOffset(header.structureSize() + endOfSecurityBuffer + padding);
+		updatedResponse.negotiateContextOffset(endOfSecurityBuffer + initialPadding);
 		updatedResponse.negotiateContextCount((short) contexts.size());
 		return updatedResponse;
 	}

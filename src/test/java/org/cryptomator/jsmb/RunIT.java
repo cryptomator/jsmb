@@ -4,10 +4,15 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.simple.SimpleLogger;
 
 import java.io.IOException;
 
 public class RunIT {
+
+	static {
+		System.setProperty(SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "DEBUG");
+	}
 
 	private static final Logger LOG = LoggerFactory.getLogger(RunIT.class);
 

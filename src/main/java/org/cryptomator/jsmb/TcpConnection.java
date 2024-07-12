@@ -1,6 +1,5 @@
 package org.cryptomator.jsmb;
 
-import org.cryptomator.jsmb.common.SMBStatus;
 import org.cryptomator.jsmb.common.SMBMessage;
 import org.cryptomator.jsmb.smb1.SMB1MessageParser;
 import org.cryptomator.jsmb.smb1.SMB1Negotiator;
@@ -21,6 +20,7 @@ class TcpConnection implements Runnable {
 
 	private final TcpServer server;
 	private final Socket socket;
+	private final Connection connection = new Connection();
 
 	public TcpConnection(TcpServer server, Socket socket) {
 		this.server = server;
@@ -68,7 +68,7 @@ class TcpConnection implements Runnable {
 	private void handleSmb1Packet(MemorySegment segment) throws MalformedMessageException {
 		var msg = SMB1MessageParser.parse(segment);
 		var response = switch (msg) {
-			case SmbComNegotiateRequest request -> new SMB1Negotiator(server).negotiate(request);
+			case SmbComNegotiateRequest request -> new SMB1Negotiator(server, connection).negotiate(request);
 			default -> throw new MalformedMessageException("Command not implemented: " + msg.command());
 		};
 		writeResponse(response);
@@ -78,10 +78,11 @@ class TcpConnection implements Runnable {
 		int nextCommand = 0;
 		do {
 			var msg = SMB2MessageParser.parse(segment.asSlice(nextCommand));
-			switch (msg) {
-				case NegotiateRequest request -> LOG.info("Received NEGOTIATE request with dialects: {}", request.dialects());
+			var response = switch (msg) {
+				case NegotiateRequest request -> new Negotiator(server, connection).negotiate(request);
 				default -> throw new MalformedMessageException("Command not implemented: " + msg.header().command());
-			}
+			};
+			writeResponse(response);
 			nextCommand = msg.header().nextCommand();
 		} while (nextCommand != 0);
 	}

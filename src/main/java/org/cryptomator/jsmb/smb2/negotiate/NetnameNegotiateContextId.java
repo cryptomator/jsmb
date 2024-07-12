@@ -1,4 +1,4 @@
-package org.cryptomator.jsmb.smb2.capabilities;
+package org.cryptomator.jsmb.smb2.negotiate;
 
 import java.lang.foreign.MemorySegment;
 

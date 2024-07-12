@@ -1,4 +1,4 @@
-package org.cryptomator.jsmb.smb2.capabilities;
+package org.cryptomator.jsmb.smb2.negotiate;
 
 import org.cryptomator.jsmb.util.Layouts;
 import org.cryptomator.jsmb.util.MemorySegments;
