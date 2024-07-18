@@ -37,7 +37,7 @@ public sealed interface NegotiateContext permits PreauthIntegrityCapabilities, E
 	MemorySegment data();
 
 	default int segmentSize() {
-		return 2 + 2 + (short) data().byteSize();
+		return 8 + (short) data().byteSize();
 	}
 
 	default MemorySegment segment() {

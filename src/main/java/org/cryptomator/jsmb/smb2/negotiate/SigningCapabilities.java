@@ -19,7 +19,7 @@ public record SigningCapabilities(MemorySegment data) implements NegotiateContex
 
 	@Override
 	public short contextType() {
-		return SIGNING_CAPABILITIES;
+		return NegotiateContext.SIGNING_CAPABILITIES;
 	}
 
 	public short signingAlgorithmCount() {

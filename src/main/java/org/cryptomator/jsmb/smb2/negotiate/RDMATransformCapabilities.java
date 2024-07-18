@@ -20,7 +20,7 @@ public record RDMATransformCapabilities(MemorySegment data) implements Negotiate
 
 	@Override
 	public short contextType() {
-		return RDMA_TRANSFORM_CAPABILITIES;
+		return NegotiateContext.RDMA_TRANSFORM_CAPABILITIES;
 	}
 
 	public short transformCount() {

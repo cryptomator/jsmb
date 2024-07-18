@@ -4,27 +4,23 @@ import org.cryptomator.jsmb.TcpServer;
 import org.cryptomator.jsmb.asn1.NegTokenInit2;
 import org.cryptomator.jsmb.common.SMBMessage;
 import org.cryptomator.jsmb.common.SMBStatus;
+import org.cryptomator.jsmb.ntlm.NtlmNegotiateMessage;
 import org.cryptomator.jsmb.smb2.negotiate.*;
 import org.cryptomator.jsmb.util.Bytes;
+import org.cryptomator.jsmb.util.Layouts;
 import org.cryptomator.jsmb.util.WinFileTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.security.SecureRandomParameters;
-import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.random.RandomGenerator;
-import java.util.stream.Stream;
-
-import static org.cryptomator.jsmb.smb2.negotiate.PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Processes the SMB 2 negotiation request and returns the negotiation response.
  * @param server
- * @param result
+ * @param connection
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/b39f253e-4963-40df-8dff-2f9040ebbeb1">Receiving an SMB2 NEGOTIATE Request</a>
  */
 public record Negotiator(TcpServer server, Connection connection) {
@@ -97,7 +93,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		response.systemTime(WinFileTime.now());
 		response.serverStartTime(0); // as per spec
 
-		Set<NegotiateContext> contexts = HashSet.newHashSet(3);
+		List<NegotiateContext> contexts = new ArrayList<>();
 		// SMB2_PREAUTH_INTEGRITY_CAPABILITIES
 		var salt = genSalt();
 		contexts.add(PreauthIntegrityCapabilities.build(connection.preauthIntegrityHashId, salt));
@@ -113,7 +109,8 @@ public record Negotiator(TcpServer server, Connection connection) {
 		contexts.add(TransportCapabilities.build(0)); // no transport level security
 
 		// gss token:
-		var gssToken = NegTokenInit2.create(new byte[16]);
+		var mechToken = NtlmNegotiateMessage.create("jSMB"); // TODO make this configurable
+		var gssToken = NegTokenInit2.create(mechToken.segment().toArray(Layouts.BYTE));
 
 		// finalize response:
 		response = response.withSecurityBuffer(gssToken).withNegotiateContexts(contexts);

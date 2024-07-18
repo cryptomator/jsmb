@@ -16,7 +16,7 @@ public record TransportCapabilities(MemorySegment data) implements NegotiateCont
 
 	@Override
 	public short contextType() {
-		return TRANSPORT_CAPABILITIES;
+		return NegotiateContext.TRANSPORT_CAPABILITIES;
 	}
 
 	public int flags() {

@@ -5,6 +5,7 @@ import org.cryptomator.jsmb.util.Layouts;
 import org.cryptomator.jsmb.util.MemorySegments;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 
@@ -98,24 +99,32 @@ public record NegotiateResponse(PacketHeader header, MemorySegment segment) impl
 		return updatedResponse;
 	}
 
-	public NegotiateResponse withNegotiateContexts(Set<NegotiateContext> contexts) {
+	public NegotiateResponse withNegotiateContexts(Collection<NegotiateContext> contexts) {
+		var maxCombinedSize = contexts.stream().mapToInt(NegotiateContext::segmentSize).map(size -> size + 8).sum();
+		var contextsSegment = MemorySegment.ofArray(new byte[maxCombinedSize]);
 		// start of negotiate context is 8-byte-aligned
-		int endOfSecurityBuffer = header.structureSize() + 64 + securityBufferLength();
-		int initialPadding = (8 - endOfSecurityBuffer % 8) % 8;
-		var contextsSegment = MemorySegment.ofArray(new byte[initialPadding]);
+		var pos = 0;
 		for (var context : contexts) {
-			contextsSegment = MemorySegments.concat(contextsSegment, context.segment());
-			// align next context to 8 bytes:
-			if (contextsSegment.byteSize() % 8 != 0) {
-				int intermediatePadding = (int) (8 - contextsSegment.byteSize() % 8) % 8;
-				contextsSegment = MemorySegments.concat(contextsSegment, MemorySegment.ofArray(new byte[intermediatePadding]));
+			// add further padding to align to 8 bytes
+			if (pos % 8 != 0) {
+				pos += (8 - pos % 8) % 8;
 			}
+			var contextSize = context.segmentSize();
+			assert pos % 8 == 0;
+			MemorySegment.copy(context.segment(), 0, contextsSegment, pos, contextSize);
+			pos += contextSize;
 		}
-		var segmentWithContexts = MemorySegments.concat(segment, contextsSegment);
+		var paddedSegment = MemorySegments.pad(segment, 8);
+		var segmentWithContexts = MemorySegments.concat(paddedSegment, contextsSegment.asSlice(0, pos));
 		var updatedResponse = new NegotiateResponse(header, segmentWithContexts);
-		updatedResponse.negotiateContextOffset(endOfSecurityBuffer + initialPadding);
+		updatedResponse.negotiateContextOffset((int) (header.structureSize() + paddedSegment.byteSize()));
 		updatedResponse.negotiateContextCount((short) contexts.size());
 		return updatedResponse;
+	}
+
+	public int alignPos(int pos) {
+		// return next position divisible by 8
+		return (pos + 7) & ~7;
 	}
 
 }

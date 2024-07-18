@@ -34,9 +34,24 @@ public class MemorySegments {
 			throw new IllegalArgumentException("MemorySegment too large to concat");
 		}
 		var result = MemorySegment.ofArray(new byte[(int) (left.byteSize() + right.byteSize())]);
-		result.copyFrom(left);
-		result.asSlice(left.byteSize()).copyFrom(right);
+		MemorySegment.copy(left, 0, result, 0, left.byteSize());
+		MemorySegment.copy(right, 0, result, left.byteSize(), right.byteSize());
 		return result;
 	}
 
+	/**
+	 * Creates a new on-heap copy of the given segment, adding a padding in order to align the resulting segment to the given alignment.
+	 * @param segment original segment
+	 * @param alignment number of bytes to align to
+	 * @return If the original segment is already aligned, the original segment is returned. Otherwise, a new segment is created, containing the original segment and padding bytes.
+	 */
+	public static MemorySegment pad(MemorySegment segment, int alignment) {
+		if (segment.byteSize() % alignment == 0) {
+			return segment;
+		}
+		var padding = alignment - (segment.byteSize() % alignment);
+		var result = MemorySegment.ofArray(new byte[(int) (segment.byteSize() + padding)]);
+		MemorySegment.copy(segment, 0, result, 0, segment.byteSize());
+		return result;
+	}
 }

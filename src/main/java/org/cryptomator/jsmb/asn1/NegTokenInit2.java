@@ -1,7 +1,6 @@
 package org.cryptomator.jsmb.asn1;
 
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 
 /**
  * A factory for NegTokenInit2 ASN.1 structures
@@ -34,9 +33,13 @@ public class NegTokenInit2 {
 												)
 										)
 								)
+//								ASN1Node.constructed(ASN1Id.of(0xA4),
+//										ASN1Node.primitive(ASN1Id.OCTET_STRING, new byte[8])
+//								)
 						)
 				)
 		);
 		return rootNode.serialize();
 	}
+
 }

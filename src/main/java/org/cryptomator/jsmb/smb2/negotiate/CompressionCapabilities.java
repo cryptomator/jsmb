@@ -33,7 +33,7 @@ public record CompressionCapabilities(MemorySegment data) implements NegotiateCo
 
 	@Override
 	public short contextType() {
-		return COMPRESSION_CAPABILITIES;
+		return NegotiateContext.COMPRESSION_CAPABILITIES;
 	}
 
 	public short compressionAlgorithmCount() {

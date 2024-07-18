@@ -6,6 +6,6 @@ public record NetnameNegotiateContextId(MemorySegment data) implements Negotiate
 
 	@Override
 	public short contextType() {
-		return NETNAME_NEGOTIATE_CONTEXT_ID;
+		return NegotiateContext.NETNAME_NEGOTIATE_CONTEXT_ID;
 	}
 }
