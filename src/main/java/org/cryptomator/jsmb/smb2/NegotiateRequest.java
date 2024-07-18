@@ -73,10 +73,12 @@ public record NegotiateRequest(PacketHeader header, MemorySegment segment) imple
 
 		MemorySegment contextsSegment = segment.asSlice(endOfDialects + padding);
 		Set<NegotiateContext> result = new HashSet<>();
-		for (int i = 0; i < negotiateContextCount(); i++) {
-			var ctx = NegotiateContext.parse(contextsSegment);
+		for (int offset = 0, i = 0; i < negotiateContextCount(); i++) {
+			var ctx = NegotiateContext.parse(contextsSegment.asSlice(offset));
 			result.add(ctx);
-			contextsSegment = contextsSegment.asSlice(ctx.segmentSize());
+			var ctxSize = ctx.segmentSize();
+			var paddingSize = (8 - ctxSize % 8) % 8;
+			offset += ctxSize + paddingSize;
 		}
 		return result;
 	}

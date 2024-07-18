@@ -122,9 +122,4 @@ public record NegotiateResponse(PacketHeader header, MemorySegment segment) impl
 		return updatedResponse;
 	}
 
-	public int alignPos(int pos) {
-		// return next position divisible by 8
-		return (pos + 7) & ~7;
-	}
-
 }
