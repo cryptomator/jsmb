@@ -127,8 +127,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		}
 
 		// gss token:
-		var mechToken = NtlmNegotiateMessage.create("jSMB"); // TODO make this configurable
-		var gssToken = NegTokenInit2.create(mechToken.segment().toArray(Layouts.BYTE));
+		var gssToken = NegTokenInit2.createNtlmOnly();
 
 		// finalize response:
 		response = response.withSecurityBuffer(gssToken).withNegotiateContexts(contexts);

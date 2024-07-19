@@ -15,26 +15,33 @@ public record NtlmNegotiateMessage(MemorySegment segment) {
 	private static final int MESSAGE_TYPE = 0x00000001;
 	private static final byte NTLMSSP_REVISION_W2K3 = 0x0F;
 
-	public static NtlmNegotiateMessage create(String domainName) {
-		byte[] domainNameBytes = domainName.getBytes(StandardCharsets.US_ASCII);
-
-		MemorySegment segment = MemorySegment.ofArray(new byte[40 + domainNameBytes.length]);
+	public static NtlmNegotiateMessage createBasicMessage() {
+		MemorySegment segment = MemorySegment.ofArray(new byte[40]);
 		segment.copyFrom(MemorySegment.ofArray(SIGNATURE)); // Signature
 		segment.set(Layouts.LE_INT32, 8, MESSAGE_TYPE); // MessageType
 
 		// Flags
-		int flags = NegotiateFlags.NTLMSSP_NEGOTIATE_KEY_EXCH | NegotiateFlags.NTLMSSP_NEGOTIATE_VERSION | NegotiateFlags.NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED | NegotiateFlags.NTLMSSP_NEGOTIATE_UNICODE;
+		int flags = NegotiateFlags.NTLMSSP_NEGOTIATE_KEY_EXCH
+				| NegotiateFlags.NTLMSSP_NEGOTIATE_128
+				| NegotiateFlags.NTLMSSP_NEGOTIATE_VERSION
+				| NegotiateFlags.NTLMSSP_NEGOTIATE_TARGET_INFO
+				| NegotiateFlags.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY
+				| NegotiateFlags.NTLMSSP_NEGOTIATE_ALWAYS_SIGN
+				| NegotiateFlags.NTLMSSP_NEGOTIATE_NTLM
+				| NegotiateFlags.NTLMSSP_NEGOTIATE_SIGN
+				| NegotiateFlags.NTLMSSP_REQUEST_TARGET
+				| NegotiateFlags.NTLMSSP_NEGOTIATE_UNICODE;
 		segment.set(Layouts.LE_INT32, 12, flags);
 
 		// DomainNameFields:
-		segment.set(Layouts.LE_UINT16, 16, (char) domainNameBytes.length); // DomainNameLen
-		segment.set(Layouts.LE_UINT16, 18, (char) domainNameBytes.length); // DomainNameMaxLen
+		segment.set(Layouts.LE_UINT16, 16, (char) 0); // DomainNameLen
+		segment.set(Layouts.LE_UINT16, 18, (char) 0); // DomainNameMaxLen
 		segment.set(Layouts.LE_INT32, 20, 40); // DomainNameBufferOffset
 
 		// WorkstationFields:
 		segment.set(Layouts.LE_UINT16, 24, (char) 0); // WorkstationLen
 		segment.set(Layouts.LE_UINT16, 26, (char) 0); // WorkstationMaxLen
-		segment.set(Layouts.LE_INT32, 28, 40 + domainNameBytes.length); // WorkstationBufferOffset
+		segment.set(Layouts.LE_INT32, 28, 40); // WorkstationBufferOffset
 
 		// Version (https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/b1a6ceb2-f8ad-462b-b5af-f18527c48175):
 		segment.set(Layouts.BYTE, 32, (byte) 6); // ProductMajorVersion TODO
@@ -42,9 +49,9 @@ public record NtlmNegotiateMessage(MemorySegment segment) {
 		segment.set(Layouts.LE_UINT16, 34, (char) 7600); // ProductBuild TODO
 		segment.set(Layouts.BYTE, 39, NTLMSSP_REVISION_W2K3); // NTLMRevisionCurrent
 
-		// Payload:
+		// Payload (empty for now):
 		// DomainName + WorkstationName
-		MemorySegment.copy(MemorySegment.ofArray(domainNameBytes), 0, segment, 40, domainNameBytes.length); // NegotiateFlags
+		// e.g. MemorySegment.copy(MemorySegment.ofArray(domainNameBytes), 0, segment, 40, domainNameBytes.length); // NegotiateFlags
 
 		return new NtlmNegotiateMessage(segment);
 	}
