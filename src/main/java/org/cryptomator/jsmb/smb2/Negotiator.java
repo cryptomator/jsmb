@@ -98,15 +98,33 @@ public record Negotiator(TcpServer server, Connection connection) {
 		var salt = genSalt();
 		contexts.add(PreauthIntegrityCapabilities.build(connection.preauthIntegrityHashId, salt));
 		// SMB2_ENCRYPTION_CAPABILITIES
-		contexts.add(EncryptionCapabilities.build((char) 0)); // indicate no common cipher TODO: eventually support encryption, also setting connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION
+		var requestedEncryptionCapabilities = request.negotiateContext(EncryptionCapabilities.class);
+		if (requestedEncryptionCapabilities != null) {
+			connection.cipherId = UInt16.stream(requestedEncryptionCapabilities.ciphers()).anyMatch(c -> c == EncryptionCapabilities.AES_256_GCM)
+					? EncryptionCapabilities.AES_256_GCM
+					: EncryptionCapabilities.NO_COMMON_CIPHER;
+			contexts.add(EncryptionCapabilities.build(connection.cipherId)); // TODO: also set connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION
+		}
 		// SMB2_COMPRESSION_CAPABILITIES
-		contexts.add(CompressionCapabilities.build(new char[]{CompressionCapabilities.ALG_NONE}, CompressionCapabilities.FLAG_NONE)); // compression not supported
+		if (request.negotiateContext(CompressionCapabilities.class) != null) {
+			contexts.add(CompressionCapabilities.build(new char[]{CompressionCapabilities.ALG_NONE}, CompressionCapabilities.FLAG_NONE)); // compression not supported
+		}
 		// SMB2_RDMA_TRANSFORM_CAPABILITIES
-		contexts.add(RDMATransformCapabilities.build(new char[]{RDMATransformCapabilities.TRANSFORM_NONE})); // rdma transform not supported
+		if (request.negotiateContext(RDMATransformCapabilities.class) != null) {
+			contexts.add(RDMATransformCapabilities.build(new char[]{RDMATransformCapabilities.TRANSFORM_NONE})); // rdma transform not supported
+		}
 		// SMB2_SIGNING_CAPABILITIES
-		contexts.add(SigningCapabilities.build(SigningCapabilities.HMAC_SHA256)); // TODO use alg from request
+		var requestedSigningCapabilities = request.negotiateContext(SigningCapabilities.class);
+		if (request.negotiateContext(SigningCapabilities.class) != null) {
+			connection.signingAlgorithmId = UInt16.stream(requestedSigningCapabilities.signingAlgorithms()).anyMatch(c -> c == SigningCapabilities.AES_GMAC)
+					? SigningCapabilities.AES_GMAC
+					: SigningCapabilities.AES_CMAC;
+			contexts.add(SigningCapabilities.build(connection.signingAlgorithmId));
+		}
 		// SMB2_TRANSPORT_CAPABILITIES
-		contexts.add(TransportCapabilities.build(0)); // no transport level security
+		if (request.negotiateContext(TransportCapabilities.class) != null) {
+			contexts.add(TransportCapabilities.build(0)); // no transport level security
+		}
 
 		// gss token:
 		var mechToken = NtlmNegotiateMessage.create("jSMB"); // TODO make this configurable
