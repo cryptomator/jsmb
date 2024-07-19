@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.smb2.negotiate.NegotiateContext;
 import org.cryptomator.jsmb.util.Layouts;
+import org.cryptomator.jsmb.util.UInt16;
 
 import java.lang.foreign.MemorySegment;
 import java.util.HashSet;
@@ -15,16 +16,16 @@ import java.util.UUID;
  */
 public record NegotiateRequest(PacketHeader header, MemorySegment segment) implements SMB2Message {
 
-	public short structureSize() {
-		return segment.get(Layouts.LE_INT16, 0); // should always be 36, regardless of dialects and negotiate contexts
+	public char structureSize() {
+		return segment.get(Layouts.LE_UINT16, 0); // should always be 36, regardless of dialects and negotiate contexts
 	}
 
-	public short dialectCount() {
-		return segment.get(Layouts.LE_INT16, 2);
+	public char dialectCount() {
+		return segment.get(Layouts.LE_UINT16, 2);
 	}
 
-	public short securityMode() {
-		return segment.get(Layouts.LE_INT16, 4);
+	public char securityMode() {
+		return segment.get(Layouts.LE_UINT16, 4);
 	}
 
 	public int capabilities() {
@@ -41,25 +42,20 @@ public record NegotiateRequest(PacketHeader header, MemorySegment segment) imple
 		return segment.get(Layouts.LE_INT32, 28);
 	}
 
-	public short negotiateContextCount() {
-		return segment.get(Layouts.LE_INT16, 32);
+	public char negotiateContextCount() {
+		return segment.get(Layouts.LE_UINT16, 32);
 	}
 
 	public long clientStartTime() {
 		return segment.get(Layouts.LE_INT64, 28);
 	}
 
-	public short[] dialects() {
-		return segment.asSlice(36, dialectCount() * Short.BYTES).toArray(Layouts.LE_INT16);
+	public char[] dialects() {
+		return segment.asSlice(36, dialectCount() * Character.BYTES).toArray(Layouts.LE_UINT16);
 	}
 
-	public boolean supportsDialect(short dialect) {
-		for (short d : dialects()) {
-			if (d == dialect) {
-				return true;
-			}
-		}
-		return false;
+	public boolean supportsDialect(char dialect) {
+		return UInt16.stream(dialects()).anyMatch(d -> d == dialect);
 	}
 
 	public Set<NegotiateContext> negotiateContexts() {
@@ -68,7 +64,7 @@ public record NegotiateRequest(PacketHeader header, MemorySegment segment) imple
 		}
 
 		// start of negotiate context is 8-byte-aligned
-		int endOfDialects = 36 + dialectCount() * Short.BYTES;
+		int endOfDialects = 36 + dialectCount() * Character.BYTES;
 		int padding = 8 - endOfDialects % 8;
 
 		MemorySegment contextsSegment = segment.asSlice(endOfDialects + padding);

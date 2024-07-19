@@ -14,8 +14,8 @@ public record SmbComNegotiateResponse(MemorySegment segment) implements SMB1Mess
 		segment.set(Layouts.LE_INT32, 5, SMBStatus.STATUS_SUCCESS); // Status
 		segment.set(Layouts.BYTE, 9, Flags1.REPLY); // Flags
 		segment.set(Layouts.BYTE, 32, (byte) 0x01); // word count
-		segment.set(Layouts.LE_INT16, 33, (short) 0xFFFF); // Dialect index
-		segment.set(Layouts.LE_INT16, 35, (short) 0x0001); // Byte count
+		segment.set(Layouts.LE_UINT16, 33, (char) 0xFFFF); // Dialect index
+		segment.set(Layouts.LE_UINT16, 35, (char) 0x0001); // Byte count
 		segment.set(Layouts.BYTE, 36, (byte) 0x00); // bytes
 		return new SmbComNegotiateResponse(segment);
 	}

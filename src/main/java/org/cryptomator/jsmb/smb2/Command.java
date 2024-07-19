@@ -23,14 +23,14 @@ public enum Command {
 	SET_INFO(0x0011),
 	OPLOCK_BREAK(0x0012);
 
-	private final short value;
+	private final char value;
 
 	Command(@Range(from = 0, to = 0xFFFF) int value) {
 		assert value <= 0xFFFF;
-		this.value = (short) value;
+		this.value = (char) value;
 	}
 
-	public short value() {
+	public char value() {
 		return value;
 	}
 
@@ -40,7 +40,7 @@ public enum Command {
 	 * @throws IllegalArgumentException if this enum type has no constant with the specified nam
 	 * @return the enum constant with the specified value
 	 */
-	public static Command valueOf(short value) {
+	public static Command valueOf(char value) {
 		for (Command command : values()) {
 			if (command.value == value) {
 				return command;

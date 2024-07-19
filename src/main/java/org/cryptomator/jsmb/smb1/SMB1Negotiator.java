@@ -29,10 +29,10 @@ public record SMB1Negotiator(TcpServer server, Connection connection) {
 			LOG.info("SMB1: Upgrading to SMB2...");
 			connection.supportsMultiCredit = true;
 			var header = PacketHeader.builder();
-			header.creditCharge((short) 0);
+			header.creditCharge((char) 0);
 			header.status(SMBStatus.STATUS_SUCCESS);
 			header.command(Command.NEGOATIATE.value());
-			header.creditResponse((short) 1);
+			header.creditResponse((char) 1);
 			header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 			header.nextCommand(0);
 			header.messageId(0);

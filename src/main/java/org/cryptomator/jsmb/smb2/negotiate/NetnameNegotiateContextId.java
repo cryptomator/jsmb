@@ -5,7 +5,7 @@ import java.lang.foreign.MemorySegment;
 public record NetnameNegotiateContextId(MemorySegment data) implements NegotiateContext {
 
 	@Override
-	public short contextType() {
+	public char contextType() {
 		return NegotiateContext.NETNAME_NEGOTIATE_CONTEXT_ID;
 	}
 }

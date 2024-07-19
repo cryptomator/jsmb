@@ -15,36 +15,36 @@ import java.util.HexFormat;
  */
 public record PreauthIntegrityCapabilities(MemorySegment data) implements NegotiateContext {
 
-	public static final short HASH_ALGORITHM_SHA512 = 0x0001;
+	public static final char HASH_ALGORITHM_SHA512 = 0x0001;
 
-	public static PreauthIntegrityCapabilities build(short hash, byte[] salt) {
+	public static PreauthIntegrityCapabilities build(char hash, byte[] salt) {
 		var data = MemorySegment.ofArray(new byte[6 + salt.length]);
-		data.set(Layouts.LE_INT16, 0, (short) 1); // algorithm count
-		data.set(Layouts.LE_INT16, 2, (short) salt.length); // salt length
-		data.set(Layouts.LE_INT16, 4, hash);
+		data.set(Layouts.LE_UINT16, 0, (char) 1); // algorithm count
+		data.set(Layouts.LE_UINT16, 2, (char) salt.length); // salt length
+		data.set(Layouts.LE_UINT16, 4, hash);
 		data.asSlice(6, salt.length).copyFrom(MemorySegment.ofArray(salt));
 		return new PreauthIntegrityCapabilities(data);
 	}
 
 	@Override
-	public short contextType() {
+	public char contextType() {
 		return NegotiateContext.PREAUTH_INTEGRITY_CAPABILITIES;
 	}
 
-	public short hashAlgorithmCount() {
-		return data.get(Layouts.LE_INT16, 0);
+	public char hashAlgorithmCount() {
+		return data.get(Layouts.LE_UINT16, 0);
 	}
 
-	public short saltLength() {
-		return data.get(Layouts.LE_INT16, 2);
+	public char saltLength() {
+		return data.get(Layouts.LE_UINT16, 2);
 	}
 
-	public short[] hashAlgorithms() {
-		return data.asSlice(4, hashAlgorithmCount() * Short.BYTES).toArray(Layouts.LE_INT16);
+	public char[] hashAlgorithms() {
+		return data.asSlice(4, hashAlgorithmCount() * Character.BYTES).toArray(Layouts.LE_UINT16);
 	}
 
 	public byte[] salt() {
-		return data.asSlice(4 + hashAlgorithmCount() * Short.BYTES, saltLength()).toArray(Layouts.BYTE);
+		return data.asSlice(4 + hashAlgorithmCount() * Character.BYTES, saltLength()).toArray(Layouts.BYTE);
 	}
 
 	@Override

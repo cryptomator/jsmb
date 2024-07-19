@@ -24,7 +24,7 @@ public interface SMB2Message extends SMBMessage {
 		int REPLAY_OPERATION = 0x20000000;
 	}
 
-	short STRUCTURE_SIZE = 64;
+	char STRUCTURE_SIZE = 64;
 
 	PacketHeader header();
 

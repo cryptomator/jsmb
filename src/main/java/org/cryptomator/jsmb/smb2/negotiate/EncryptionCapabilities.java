@@ -3,6 +3,10 @@ package org.cryptomator.jsmb.smb2.negotiate;
 import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
+import java.nio.CharBuffer;
+import java.util.Arrays;
+import java.util.Spliterator;
+import java.util.stream.IntStream;
 
 /**
  * The context specifying the supported encryption algorithms.
@@ -12,29 +16,30 @@ import java.lang.foreign.MemorySegment;
  */
 public record EncryptionCapabilities(MemorySegment data) implements NegotiateContext {
 
-	public static final short AES_128_CCM = 0x0001;
-	public static final short AES_128_GCM = 0x0002;
-	public static final short AES_256_CCM = 0x0003;
-	public static final short AES_256_GCM = 0x0004;
+	public static final char NO_COMMON_CIPHER = 0x0000;
+	public static final char AES_128_CCM = 0x0001;
+	public static final char AES_128_GCM = 0x0002;
+	public static final char AES_256_CCM = 0x0003;
+	public static final char AES_256_GCM = 0x0004;
 
-	public static EncryptionCapabilities build(short cipherId) {
+	public static EncryptionCapabilities build(char cipherId) {
 		var data = MemorySegment.ofArray(new byte[4]);
-		data.set(Layouts.LE_INT16, 0, (short) 1); // cipher count
-		data.set(Layouts.LE_INT16, 2, cipherId); // first element in cipher list
+		data.set(Layouts.LE_UINT16, 0, (char) 1); // cipher count
+		data.set(Layouts.LE_UINT16, 2, cipherId); // first element in cipher list
 		return new EncryptionCapabilities(data);
 	}
 
 	@Override
-	public short contextType() {
+	public char contextType() {
 		return NegotiateContext.ENCRYPTION_CAPABILITIES;
 	}
 
-	public short cipherCount() {
-		return data.get(Layouts.LE_INT16, 0);
+	public char cipherCount() {
+		return data.get(Layouts.LE_UINT16, 0);
 	}
 
-	public short[] ciphers() {
-		return data.asSlice(2, cipherCount() * Short.BYTES).toArray(Layouts.LE_INT16);
+	public char[] ciphers() {
+		return data.asSlice(2, cipherCount() * Character.BYTES).toArray(Layouts.LE_UINT16);
 	}
 
 }

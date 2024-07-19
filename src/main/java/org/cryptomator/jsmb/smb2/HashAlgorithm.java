@@ -4,12 +4,12 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public enum HashAlgorithm {
-	SHA512((short) 0x0001,  "SHA-512");
+	SHA512((char) 0x0001,  "SHA-512");
 
-	public final short id;
+	public final char id;
 	private final String algorithm;
 
-	HashAlgorithm(short id, String algorithm) {
+	HashAlgorithm(char id, String algorithm) {
 		this.id = id;
 		this.algorithm = algorithm;
 	}
@@ -23,7 +23,7 @@ public enum HashAlgorithm {
 		}
 	}
 
-	static HashAlgorithm lookup(short id) {
+	static HashAlgorithm lookup(char id) {
 		for (var alg : HashAlgorithm.values()) {
 			if (alg.id == id) {
 				return alg;
@@ -32,7 +32,7 @@ public enum HashAlgorithm {
 		throw new IllegalArgumentException("Unknown hash id: " + id);
 	}
 
-	static boolean isSupported(short id) {
+	static boolean isSupported(char id) {
 		for (var alg : HashAlgorithm.values()) {
 			if (alg.id == id) {
 				return true;

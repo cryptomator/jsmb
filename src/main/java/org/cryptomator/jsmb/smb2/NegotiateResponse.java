@@ -6,7 +6,6 @@ import org.cryptomator.jsmb.util.MemorySegments;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Collection;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -16,30 +15,30 @@ import java.util.UUID;
  */
 public record NegotiateResponse(PacketHeader header, MemorySegment segment) implements SMB2Message {
 
-	public static final short STRUCTURE_SIZE = 65;
+	public static final char STRUCTURE_SIZE = 65;
 
 	public NegotiateResponse {
-		segment.set(Layouts.LE_INT16, 0, STRUCTURE_SIZE);
+		segment.set(Layouts.LE_UINT16, 0, STRUCTURE_SIZE);
 	}
 
 	public NegotiateResponse(PacketHeader header) {
 		this(header, MemorySegment.ofArray(new byte[STRUCTURE_SIZE]));
-		securityBufferOffset((short) (header.structureSize() + 64));
-		securityBufferLength((short) 0);
+		securityBufferOffset((char) (header.structureSize() + 64));
+		securityBufferLength((char) 0);
 		negotiateContextOffset(header.structureSize() + 64 + 0);
-		negotiateContextCount((short) 0);
+		negotiateContextCount((char) 0);
 	}
 
-	public void securityMode(short securityMode) {
-		segment.set(Layouts.LE_INT16, 2, securityMode);
+	public void securityMode(char securityMode) {
+		segment.set(Layouts.LE_UINT16, 2, securityMode);
 	}
 
-	public void dialectRevision(short dialectRevision) {
-		segment.set(Layouts.LE_INT16, 4, dialectRevision);
+	public void dialectRevision(char dialectRevision) {
+		segment.set(Layouts.LE_UINT16, 4, dialectRevision);
 	}
 
-	public void negotiateContextCount(short negotiateContextCount) {
-		segment.set(Layouts.LE_INT16, 6, negotiateContextCount);
+	public void negotiateContextCount(char negotiateContextCount) {
+		segment.set(Layouts.LE_UINT16, 6, negotiateContextCount);
 	}
 
 	public void serverGuid(UUID serverGuid) {
@@ -71,16 +70,16 @@ public record NegotiateResponse(PacketHeader header, MemorySegment segment) impl
 		segment.set(Layouts.LE_INT64, 48, serverStartTime);
 	}
 
-	public void securityBufferOffset(short securityBufferOffset) {
-		segment.set(Layouts.LE_INT16, 56, securityBufferOffset);
+	public void securityBufferOffset(char securityBufferOffset) {
+		segment.set(Layouts.LE_UINT16, 56, securityBufferOffset);
 	}
 
-	public void securityBufferLength(short securityBufferLength) {
-		segment.set(Layouts.LE_INT16, 58, securityBufferLength);
+	public void securityBufferLength(char securityBufferLength) {
+		segment.set(Layouts.LE_UINT16, 58, securityBufferLength);
 	}
 
-	private short securityBufferLength() {
-		return segment.get(Layouts.LE_INT16, 58);
+	private char securityBufferLength() {
+		return segment.get(Layouts.LE_UINT16, 58);
 	}
 
 	public void negotiateContextOffset(int negotiateContextOffset) {
@@ -88,14 +87,14 @@ public record NegotiateResponse(PacketHeader header, MemorySegment segment) impl
 	}
 
 	public NegotiateResponse withSecurityBuffer(byte[] buffer) {
-		if (buffer.length > Short.MAX_VALUE) {
+		if (buffer.length > Character.MAX_VALUE) {
 			throw new IllegalArgumentException("Buffer too large");
 		}
 		var segmentWithoutBuffer = segment.asSlice(0, 64);
 		var segmentWithBuffer = MemorySegments.concat(segmentWithoutBuffer, MemorySegment.ofArray(buffer));
 		var updatedResponse = new NegotiateResponse(header, segmentWithBuffer);
-		updatedResponse.securityBufferOffset((short) (header.structureSize() + 64));
-		updatedResponse.securityBufferLength((short) buffer.length);
+		updatedResponse.securityBufferOffset((char) (header.structureSize() + 64));
+		updatedResponse.securityBufferLength((char) buffer.length);
 		return updatedResponse;
 	}
 
@@ -118,7 +117,7 @@ public record NegotiateResponse(PacketHeader header, MemorySegment segment) impl
 		var segmentWithContexts = MemorySegments.concat(paddedSegment, contextsSegment.asSlice(0, pos));
 		var updatedResponse = new NegotiateResponse(header, segmentWithContexts);
 		updatedResponse.negotiateContextOffset((int) (header.structureSize() + paddedSegment.byteSize()));
-		updatedResponse.negotiateContextCount((short) contexts.size());
+		updatedResponse.negotiateContextCount((char) contexts.size());
 		return updatedResponse;
 	}
 

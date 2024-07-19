@@ -8,15 +8,15 @@ public record PacketHeaderBuilder(MemorySegment segment) {
 
 	public PacketHeaderBuilder {
 		segment.set(Layouts.LE_INT32, 0, SMB2Message.PROTOCOL_ID);
-		segment.set(Layouts.LE_INT16, 4, PacketHeader.STRUCTURE_SIZE);
+		segment.set(Layouts.LE_UINT16, 4, PacketHeader.STRUCTURE_SIZE);
 	}
 
 	public PacketHeaderBuilder() {
 		this(MemorySegment.ofArray(new byte[PacketHeader.STRUCTURE_SIZE]));
 	}
 
-	public PacketHeaderBuilder creditCharge(short creditCharge) {
-		segment.set(Layouts.LE_INT16, 6, creditCharge);
+	public PacketHeaderBuilder creditCharge(char creditCharge) {
+		segment.set(Layouts.LE_UINT16, 6, creditCharge);
 		return this;
 	}
 
@@ -25,13 +25,13 @@ public record PacketHeaderBuilder(MemorySegment segment) {
 		return this;
 	}
 
-	public PacketHeaderBuilder command(short command) {
-		segment.set(Layouts.LE_INT16, 12, command);
+	public PacketHeaderBuilder command(char command) {
+		segment.set(Layouts.LE_UINT16, 12, command);
 		return this;
 	}
 
-	public PacketHeaderBuilder creditResponse(short creditResponse) {
-		segment.set(Layouts.LE_INT16, 14, creditResponse);
+	public PacketHeaderBuilder creditResponse(char creditResponse) {
+		segment.set(Layouts.LE_UINT16, 14, creditResponse);
 		return this;
 	}
 

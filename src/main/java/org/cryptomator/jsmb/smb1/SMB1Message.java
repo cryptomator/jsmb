@@ -26,14 +26,14 @@ public sealed interface SMB1Message extends SMBMessage permits SmbComNegotiateRe
 	}
 
 	interface Flags2 {
-		short LONG_NAMES = 0x0001;
-		short EAS = 0x0002;
-		short SMB_SECURITY_SIGNATURE = 0x0004;
-		short IS_LONG_NAME = 0x0040;
-		short DFS = 0x1000;
-		short PAGING_IO = 0x2000;
-		short NT_STATUS = 0x4000;
-		short UNICODE = (short) 0x8000;
+		char LONG_NAMES = 0x0001;
+		char EAS = 0x0002;
+		char SMB_SECURITY_SIGNATURE = 0x0004;
+		char IS_LONG_NAME = 0x0040;
+		char DFS = 0x1000;
+		char PAGING_IO = 0x2000;
+		char NT_STATUS = 0x4000;
+		char UNICODE = 0x8000;
 	}
 
 	MemorySegment segment();
@@ -53,36 +53,36 @@ public sealed interface SMB1Message extends SMBMessage permits SmbComNegotiateRe
 		return segment().get(Layouts.LE_INT32, 5);
 	}
 
-	default short flags() {
+	default byte flags() {
 		return segment().get(Layouts.BYTE, 9);
 	}
 
-	default short flags2() {
-		return segment().get(Layouts.LE_INT16, 10);
+	default char flags2() {
+		return segment().get(Layouts.LE_UINT16, 10);
 	}
 
-	default short pidHigh() {
-		return segment().get(Layouts.LE_INT16, 12);
+	default char pidHigh() {
+		return segment().get(Layouts.LE_UINT16, 12);
 	}
 
 	default long securityFeatures() {
 		return segment().get(Layouts.LE_INT32, 14);
 	}
 
-	default short tid() {
-		return segment().get(Layouts.LE_INT16, 24);
+	default char tid() {
+		return segment().get(Layouts.LE_UINT16, 24);
 	}
 
-	default short pidLow() {
-		return segment().get(Layouts.LE_INT16, 26);
+	default char pidLow() {
+		return segment().get(Layouts.LE_UINT16, 26);
 	}
 
-	default short uid() {
-		return segment().get(Layouts.LE_INT16, 28);
+	default char uid() {
+		return segment().get(Layouts.LE_UINT16, 28);
 	}
 
-	default short mid() {
-		return segment().get(Layouts.LE_INT16, 30);
+	default char mid() {
+		return segment().get(Layouts.LE_UINT16, 30);
 	}
 
 	default byte wordCount() {
@@ -90,15 +90,15 @@ public sealed interface SMB1Message extends SMBMessage permits SmbComNegotiateRe
 	}
 
 	default MemorySegment words() {
-		return segment().asSlice(33, wordCount() * Short.BYTES);
+		return segment().asSlice(33, wordCount() * Character.BYTES);
 	}
 
-	default short byteCount() {
-		return segment().get(Layouts.LE_INT16, 33 + wordCount() * Short.BYTES);
+	default char byteCount() {
+		return segment().get(Layouts.LE_UINT16, 33 + wordCount() * Character.BYTES);
 	}
 
 	default MemorySegment bytes() {
-		return segment().asSlice(35 + wordCount() * Short.BYTES, byteCount());
+		return segment().asSlice(35 + wordCount() * Character.BYTES, byteCount());
 	}
 
 }

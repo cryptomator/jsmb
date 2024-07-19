@@ -7,18 +7,18 @@ import java.lang.foreign.MemorySegment;
 
 public sealed interface NegotiateContext permits PreauthIntegrityCapabilities, EncryptionCapabilities, CompressionCapabilities, NetnameNegotiateContextId, TransportCapabilities, RDMATransformCapabilities, SigningCapabilities {
 
-	short PREAUTH_INTEGRITY_CAPABILITIES = 0x01;
-	short ENCRYPTION_CAPABILITIES = 0x02;
-	short COMPRESSION_CAPABILITIES = 0x03;
-	short NETNAME_NEGOTIATE_CONTEXT_ID = 0x05;
-	short TRANSPORT_CAPABILITIES = 0x06;
-	short RDMA_TRANSFORM_CAPABILITIES = 0x07;
-	short SIGNING_CAPABILITIES = 0x08;
-	short CONTEXTTYPE_RESERVED = 0x0100;
+	char PREAUTH_INTEGRITY_CAPABILITIES = 0x01;
+	char ENCRYPTION_CAPABILITIES = 0x02;
+	char COMPRESSION_CAPABILITIES = 0x03;
+	char NETNAME_NEGOTIATE_CONTEXT_ID = 0x05;
+	char TRANSPORT_CAPABILITIES = 0x06;
+	char RDMA_TRANSFORM_CAPABILITIES = 0x07;
+	char SIGNING_CAPABILITIES = 0x08;
+	char CONTEXTTYPE_RESERVED = 0x0100;
 
 	static NegotiateContext parse(MemorySegment segment) {
-		var contextType = segment.get(Layouts.LE_INT16, 0);
-		var dataLen = segment.get(Layouts.LE_INT16, 2);
+		var contextType = segment.get(Layouts.LE_UINT16, 0);
+		var dataLen = segment.get(Layouts.LE_UINT16, 2);
 		var data = segment.asSlice(8, dataLen);
 		return switch (contextType) {
 			case PREAUTH_INTEGRITY_CAPABILITIES -> new PreauthIntegrityCapabilities(data);
@@ -32,18 +32,18 @@ public sealed interface NegotiateContext permits PreauthIntegrityCapabilities, E
 		};
 	}
 
-	short contextType();
+	char contextType();
 
 	MemorySegment data();
 
 	default int segmentSize() {
-		return 8 + (short) data().byteSize();
+		return 8 + (char) data().byteSize();
 	}
 
 	default MemorySegment segment() {
 		var header = MemorySegment.ofArray(new byte[8]);
-		header.set(Layouts.LE_INT16, 0, contextType());
-		header.set(Layouts.LE_INT16, 2, (short) data().byteSize());
+		header.set(Layouts.LE_UINT16, 0, contextType());
+		header.set(Layouts.LE_UINT16, 2, (char) data().byteSize());
 		return MemorySegments.concat(header, data());
 	}
 }

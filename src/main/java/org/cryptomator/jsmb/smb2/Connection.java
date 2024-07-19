@@ -11,22 +11,23 @@ import java.util.UUID;
 public class Connection {
 
 	public int clientCapabilities;
-	public short clientSecurityMode;
+	public char clientSecurityMode;
 	public UUID clientGuid;
-	public short[] clientDialects;
+	public char[] clientDialects;
 	public boolean shouldSign;
-	public short negotiateDialect = (short) 0xFFFF;
+	public char negotiateDialect = (char) 0xFFFF;
 	public String dialect;
 	public int serverCapabilities;
-	public int maxWriteSize = 65536;
-	public int maxReadSize = 65536;
-	public int maxTransactSize = 65536;
-	public short preauthIntegrityHashId = PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512;
+	public int maxWriteSize = 1 << 20; // 1MiB
+	public int maxReadSize = 1 << 20; // 1MiB
+	public int maxTransactSize = 1 << 20; // 1MiB
+	public char preauthIntegrityHashId = PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512;
 	public byte[] preauthIntegrityHashValue = new byte[64];
-	public int cipherId;
-	public short[] compressionIds;
+	public char cipherId;
+	public char signingAlgorithmId;
+	public char[] compressionIds;
 	public boolean supportsChainedCompression;
-	public short[] RDMATransformIds;
+	public char[] RDMATransformIds;
 	public boolean supportsMultiCredit;
-	public short serverSecurityMode;
+	public char serverSecurityMode;
 }

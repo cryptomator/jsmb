@@ -27,19 +27,19 @@ public record NtlmNegotiateMessage(MemorySegment segment) {
 		segment.set(Layouts.LE_INT32, 12, flags);
 
 		// DomainNameFields:
-		segment.set(Layouts.LE_INT16, 16, (short) domainNameBytes.length); // DomainNameLen
-		segment.set(Layouts.LE_INT16, 18, (short) domainNameBytes.length); // DomainNameMaxLen
+		segment.set(Layouts.LE_UINT16, 16, (char) domainNameBytes.length); // DomainNameLen
+		segment.set(Layouts.LE_UINT16, 18, (char) domainNameBytes.length); // DomainNameMaxLen
 		segment.set(Layouts.LE_INT32, 20, 40); // DomainNameBufferOffset
 
 		// WorkstationFields:
-		segment.set(Layouts.LE_INT16, 24, (short) 0); // WorkstationLen
-		segment.set(Layouts.LE_INT16, 26, (short) 0); // WorkstationMaxLen
+		segment.set(Layouts.LE_UINT16, 24, (char) 0); // WorkstationLen
+		segment.set(Layouts.LE_UINT16, 26, (char) 0); // WorkstationMaxLen
 		segment.set(Layouts.LE_INT32, 28, 40 + domainNameBytes.length); // WorkstationBufferOffset
 
 		// Version (https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/b1a6ceb2-f8ad-462b-b5af-f18527c48175):
 		segment.set(Layouts.BYTE, 32, (byte) 6); // ProductMajorVersion TODO
 		segment.set(Layouts.BYTE, 33, (byte) 1); // ProductMinorVersion TODO
-		segment.set(Layouts.LE_INT16, 34, (short) 7600); // ProductBuild TODO
+		segment.set(Layouts.LE_UINT16, 34, (char) 7600); // ProductBuild TODO
 		segment.set(Layouts.BYTE, 39, NTLMSSP_REVISION_W2K3); // NTLMRevisionCurrent
 
 		// Payload:

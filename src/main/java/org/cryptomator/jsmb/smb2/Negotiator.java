@@ -8,14 +8,14 @@ import org.cryptomator.jsmb.ntlm.NtlmNegotiateMessage;
 import org.cryptomator.jsmb.smb2.negotiate.*;
 import org.cryptomator.jsmb.util.Bytes;
 import org.cryptomator.jsmb.util.Layouts;
+import org.cryptomator.jsmb.util.UInt16;
 import org.cryptomator.jsmb.util.WinFileTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Processes the SMB 2 negotiation request and returns the negotiation response.
@@ -45,7 +45,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		connection.negotiateDialect = Dialects.SMB3_1_1;
 		connection.clientSecurityMode = request.securityMode();
 		connection.supportsMultiCredit = true;
-		connection.serverSecurityMode = (short) (SecurityMode.SIGNING_ENABLED | request.securityMode() & SecurityMode.SIGNING_REQUIRED);
+		connection.serverSecurityMode = (char) (SecurityMode.SIGNING_ENABLED | request.securityMode() & SecurityMode.SIGNING_REQUIRED);
 		connection.serverCapabilities = GlobalCapabilities.SMB2_GLOBAL_CAP_LARGE_MTU;
 		LOG.debug("Client supports SMB 3.1.1");
 
@@ -62,10 +62,10 @@ public record Negotiator(TcpServer server, Connection connection) {
 		connection.cipherId = 0; // not yet supported
 
 		// SMB2_COMPRESSION_CAPABILITIES TODO
-		connection.compressionIds = new short[0]; // not yet supported
+		connection.compressionIds = new char[0]; // not yet supported
 
 		// SMB2_RDMA_TRANSFORM_CAPABILITIES TODO
-		connection.RDMATransformIds = new short[0]; // not yet supported
+		connection.RDMATransformIds = new char[0]; // not yet supported
 
 		// SMB2_SIGNING_CAPABILITIES TODO
 
@@ -73,13 +73,13 @@ public record Negotiator(TcpServer server, Connection connection) {
 
 		// create response
 		var header = PacketHeader.builder();
-		header.creditCharge((short) 0);
+		header.creditCharge((char) 0);
 		header.status(SMBStatus.STATUS_SUCCESS);
 		header.command(Command.NEGOATIATE.value());
-		header.creditResponse((short) 1);
+		header.creditResponse((char) 1);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 		header.nextCommand(0);
-		header.messageId(0);
+		header.messageId(request.header().messageId());
 		header.treeId(0);
 		header.sessionId(0L);
 		var response = new NegotiateResponse(header.build());
@@ -98,11 +98,11 @@ public record Negotiator(TcpServer server, Connection connection) {
 		var salt = genSalt();
 		contexts.add(PreauthIntegrityCapabilities.build(connection.preauthIntegrityHashId, salt));
 		// SMB2_ENCRYPTION_CAPABILITIES
-		contexts.add(EncryptionCapabilities.build((short) 0)); // indicate no common cipher TODO: eventually support encryption, also setting connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION
+		contexts.add(EncryptionCapabilities.build((char) 0)); // indicate no common cipher TODO: eventually support encryption, also setting connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION
 		// SMB2_COMPRESSION_CAPABILITIES
-		contexts.add(CompressionCapabilities.build(new short[]{CompressionCapabilities.ALG_NONE}, CompressionCapabilities.FLAG_NONE)); // compression not supported
+		contexts.add(CompressionCapabilities.build(new char[]{CompressionCapabilities.ALG_NONE}, CompressionCapabilities.FLAG_NONE)); // compression not supported
 		// SMB2_RDMA_TRANSFORM_CAPABILITIES
-		contexts.add(RDMATransformCapabilities.build(new short[]{RDMATransformCapabilities.TRANSFORM_NONE})); // rdma transform not supported
+		contexts.add(RDMATransformCapabilities.build(new char[]{RDMATransformCapabilities.TRANSFORM_NONE})); // rdma transform not supported
 		// SMB2_SIGNING_CAPABILITIES
 		contexts.add(SigningCapabilities.build(SigningCapabilities.HMAC_SHA256)); // TODO use alg from request
 		// SMB2_TRANSPORT_CAPABILITIES
@@ -123,7 +123,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 
 	private byte[] genSalt() {
 		try {
-			var salt = new byte[16];
+			var salt = new byte[32]; // same as win 10 and later
 			SecureRandom.getInstanceStrong().nextBytes(salt);
 			return salt;
 		} catch (NoSuchAlgorithmException e) {

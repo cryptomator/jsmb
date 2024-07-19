@@ -6,39 +6,39 @@ import java.lang.foreign.MemorySegment;
 
 public record PacketHeader(MemorySegment segment) {
 
-	public static final short STRUCTURE_SIZE = 64;
+	public static final char STRUCTURE_SIZE = 64;
 
 	public static PacketHeaderBuilder builder() {
 		return new PacketHeaderBuilder();
 	}
 
 	public int structureSize() {
-		return segment.get(Layouts.LE_INT16, 4);
+		return segment.get(Layouts.LE_UINT16, 4);
 
 	}
 
-	short creditCharge() {
-		return segment.get(Layouts.LE_INT16, 6);
+	char creditCharge() {
+		return segment.get(Layouts.LE_UINT16, 6);
 	}
 
 	public int status() {
 		return segment.get(Layouts.LE_INT32, 8);
 	}
 
-	public short channelSequence() {
-		return segment.get(Layouts.LE_INT16, 8);
+	public char channelSequence() {
+		return segment.get(Layouts.LE_UINT16, 8);
 	}
 
-	public short command() {
-		return segment.get(Layouts.LE_INT16, 12);
+	public char command() {
+		return segment.get(Layouts.LE_UINT16, 12);
 	}
 
-	public short creditRequest() {
-		return segment.get(Layouts.LE_INT16, 14);
+	public char creditRequest() {
+		return segment.get(Layouts.LE_UINT16, 14);
 	}
 
-	public short creditResponse() {
-		return segment.get(Layouts.LE_INT16, 14);
+	public char creditResponse() {
+		return segment.get(Layouts.LE_UINT16, 14);
 	}
 
 	public int flags() {
