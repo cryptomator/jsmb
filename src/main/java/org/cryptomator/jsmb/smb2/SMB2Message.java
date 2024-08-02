@@ -1,9 +1,10 @@
 package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.common.SMBMessage;
+import org.cryptomator.jsmb.util.Bytes;
+import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 /**
  * A SMB 2 Message
@@ -24,19 +25,12 @@ public interface SMB2Message extends SMBMessage {
 		int REPLAY_OPERATION = 0x20000000;
 	}
 
-	char STRUCTURE_SIZE = 64;
-
 	PacketHeader header();
 
 	MemorySegment segment();
 
 	default byte[] serialize() {
-		var hBuf = header().segment().asByteBuffer();
-		var bBuf = segment().asByteBuffer();
-		ByteBuffer buffer = ByteBuffer.allocate(hBuf.remaining() + bBuf.remaining());
-		buffer.put(hBuf);
-		buffer.put(bBuf);
-		return buffer.array();
+		return Bytes.concat(header().segment().toArray(Layouts.BYTE), segment().toArray(Layouts.BYTE));
 	}
 
 }

@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb;
 
+import org.cryptomator.jsmb.smb2.Global;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,12 +21,14 @@ public class TcpServer implements AutoCloseable {
 	private final Thread acceptor;
 	public final UUID guid;
 	public final Instant startTime;
+	public final Global global;
 
 	private TcpServer(ServerSocket serverSocket) {
 		this.guid = UUID.randomUUID();
 		this.startTime = Instant.now();
 		this.serverSocket = serverSocket;
 		this.acceptor = Thread.ofVirtual().name("TCP Connection Listener").uncaughtExceptionHandler(this::handleAcceptException).start(this::acceptConnections);
+		this.global = new Global();
 	}
 
 	public int getLocalPort() {

@@ -8,5 +8,7 @@ package org.cryptomator.jsmb.common;
  */
 public interface SMBStatus {
 	int STATUS_SUCCESS = 0x00000000;
+	int STATUS_MORE_PROCESSING_REQUIRED = 0xC0000016;
 	int STATUS_SMB_BAD_COMMAND = 0x00160002;
+	int STATUS_WRONG_PASSWORD = 0xC000006A;
 }

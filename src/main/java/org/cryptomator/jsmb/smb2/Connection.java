@@ -2,6 +2,8 @@ package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.smb2.negotiate.PreauthIntegrityCapabilities;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -9,6 +11,12 @@ import java.util.UUID;
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/0055d1e1-18fa-4c1c-8941-df7203d440c7">Per Transport Connection</a>
  */
 public class Connection {
+
+	public final Global global;
+
+	public Connection(Global global) {
+		this.global = global;
+	}
 
 	public int clientCapabilities;
 	public char clientSecurityMode;
@@ -29,5 +37,8 @@ public class Connection {
 	public boolean supportsChainedCompression;
 	public char[] RDMATransformIds;
 	public boolean supportsMultiCredit;
+
 	public char serverSecurityMode;
+
+	public Map<Long, Session> sessionTable = HashMap.newHashMap(1);
 }

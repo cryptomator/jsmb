@@ -20,11 +20,14 @@ class TcpConnection implements Runnable {
 
 	private final TcpServer server;
 	private final Socket socket;
-	private final Connection connection = new Connection();
+	private final Connection connection;
+	private final Negotiator negotiator;
 
 	public TcpConnection(TcpServer server, Socket socket) {
 		this.server = server;
 		this.socket = socket;
+		this.connection = new Connection(server.global);
+		this.negotiator = new Negotiator(server, connection);
 	}
 
 	@Override
@@ -79,7 +82,8 @@ class TcpConnection implements Runnable {
 		do {
 			var msg = SMB2MessageParser.parse(segment.asSlice(nextCommand));
 			var response = switch (msg) {
-				case NegotiateRequest request -> new Negotiator(server, connection).negotiate(request);
+				case NegotiateRequest request -> negotiator.negotiate(request);
+				case SessionSetupRequest request -> negotiator.sessionSetup(request);
 				default -> throw new MalformedMessageException("Command not implemented: " + msg.header().command());
 			};
 			writeResponse(response);

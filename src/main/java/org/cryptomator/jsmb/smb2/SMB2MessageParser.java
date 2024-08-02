@@ -25,6 +25,7 @@ public class SMB2MessageParser {
 		var header = new PacketHeader(headerSegment);
 		return switch (Command.valueOf(header.command())) {
 			case NEGOATIATE -> new NegotiateRequest(header, bodySegment);
+			case SESSION_SETUP -> new SessionSetupRequest(header, bodySegment);
 			default -> throw new MalformedMessageException("Unknown command: " + header.command());
 		};
 	}

@@ -9,6 +9,7 @@ interface ASN1Id {
 	// primitive
 	byte[] OCTET_STRING = new byte[] { 0x04 };
 	byte[] OBJECT_IDENTIFIER = new byte[] { 0x06 };
+	byte[] ENUMERATED = new byte[] { 0x0A };
 	byte[] GENERAL_STRING = new byte[] { 0x1B };
 
 	static byte[] of(int... bytes) {
