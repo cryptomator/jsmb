@@ -5,7 +5,6 @@ import org.cryptomator.jsmb.util.MemorySegments;
 import org.cryptomator.jsmb.util.WinFileTime;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.LongBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
