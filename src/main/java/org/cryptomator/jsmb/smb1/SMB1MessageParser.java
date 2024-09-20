@@ -1,6 +1,6 @@
 package org.cryptomator.jsmb.smb1;
 
-import org.cryptomator.jsmb.MalformedMessageException;
+import org.cryptomator.jsmb.common.MalformedMessageException;
 import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;

@@ -1,4 +1,4 @@
-package org.cryptomator.jsmb;
+package org.cryptomator.jsmb.common;
 
 public class MalformedMessageException extends IllegalArgumentException {
 

@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb;
 
+import org.cryptomator.jsmb.common.MalformedMessageException;
 import org.cryptomator.jsmb.common.SMBMessage;
 import org.cryptomator.jsmb.smb1.SMB1MessageParser;
 import org.cryptomator.jsmb.smb1.SMB1Negotiator;
