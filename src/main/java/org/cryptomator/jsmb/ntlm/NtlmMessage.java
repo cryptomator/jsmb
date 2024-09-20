@@ -20,7 +20,13 @@ public sealed interface NtlmMessage permits NtlmNegotiateMessage, NtlmChallengeM
 		return segment().get(Layouts.LE_INT32, 8);
 	}
 
-	static NtlmMessage parse(MemorySegment segment) {
+	/**
+	 * Parses an NTLM message from a memory segment.
+	 * @param segment the memory segment containing the NTLM message
+	 * @return the parsed NTLM message
+	 * @throws IllegalArgumentException in case the memory segment does not contain an NTLM message
+	 */
+	static NtlmMessage parse(MemorySegment segment) throws IllegalArgumentException {
 		var signature = segment.asSlice(0, SIGNATURE.length).toArray(Layouts.BYTE);
 		if (!Arrays.equals(SIGNATURE, 0, SIGNATURE.length, signature, 0, SIGNATURE.length)) {
 			throw new IllegalArgumentException("Not an NTLM message");

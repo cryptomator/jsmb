@@ -7,6 +7,8 @@ import org.cryptomator.jsmb.util.WinFileTime;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Represents an AV pair as defined in the NTLM authentication protocol.
@@ -61,6 +63,25 @@ public record AVPair(MemorySegment segment) {
 		header.set(Layouts.LE_UINT16, 2, (char) value.byteSize());
 		var combined = MemorySegments.concat(header, value);
 		return new AVPair(combined);
+	}
+
+	public static List<AVPair> parse(MemorySegment segment) {
+		var result = new ArrayList<AVPair>();
+		parse(segment, result);
+		return result;
+	}
+
+	private static void parse(MemorySegment segment, List<AVPair> result) {
+		if (segment.byteSize() < 4) {
+			throw new IllegalArgumentException("Segment too small for AVPair");
+		}
+		char avId = segment.get(Layouts.LE_UINT16, 0);
+		char avLen = segment.get(Layouts.LE_UINT16, 2);
+		var avPairSegment = segment.asSlice(0, 4 + avLen);
+		result.add(new AVPair(avPairSegment));
+		if (avId != MSV_AV_EOL) {
+			parse(segment.asSlice(avPairSegment.byteSize()), result);
+		}
 	}
 
 	public char avId() {

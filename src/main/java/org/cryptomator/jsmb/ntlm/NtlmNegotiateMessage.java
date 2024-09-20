@@ -9,7 +9,7 @@ import java.lang.foreign.MemorySegment;
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/b34032e5-3aae-4bc6-84c3-c6d80eadf7f2">NEGOTIATE_MESSAGE</a>
  */
-public record NtlmNegotiateMessage(MemorySegment segment) implements NtlmMessage {
+record NtlmNegotiateMessage(MemorySegment segment) implements NtlmMessage {
 
 	public static final int MESSAGE_TYPE = 0x00000001;
 

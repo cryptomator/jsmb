@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/033d32cc-88f9-4483-9bf2-b273055038ce">AUTHENTICATE_MESSAGE</a>
  */
-public record NtlmAuthenticateMessage(MemorySegment segment) implements NtlmMessage {
+record NtlmAuthenticateMessage(MemorySegment segment) implements NtlmMessage {
 
 	public static final int MESSAGE_TYPE = 0x00000003;
 
@@ -28,6 +28,14 @@ public record NtlmAuthenticateMessage(MemorySegment segment) implements NtlmMess
 		return segment.get(Layouts.LE_INT32, 16);
 	}
 
+	public MemorySegment lmChallengeResponse() {
+		if (lmChallengeResponseLen() == 0) {
+			return MemorySegment.NULL;
+		} else {
+			return segment.asSlice(lmChallengeResponseBufferOffset(), lmChallengeResponseLen());
+		}
+	}
+
 	// NtChallengeResponseFields (8 bytes):
 
 	public char ntChallengeResponseLen() {
@@ -40,6 +48,14 @@ public record NtlmAuthenticateMessage(MemorySegment segment) implements NtlmMess
 
 	public int ntChallengeResponseBufferOffset() {
 		return segment.get(Layouts.LE_INT32, 24);
+	}
+
+	public MemorySegment ntChallengeResponse() {
+		if (ntChallengeResponseLen() == 0) {
+			return MemorySegment.NULL;
+		} else {
+			return segment.asSlice(ntChallengeResponseBufferOffset(), ntChallengeResponseLen());
+		}
 	}
 
 	// DomainNameFields (8 bytes):
@@ -162,6 +178,5 @@ public record NtlmAuthenticateMessage(MemorySegment segment) implements NtlmMess
 	public byte[] mic() {
 		return segment.asSlice(72, 16).toArray(Layouts.BYTE);
 	}
-
 
 }

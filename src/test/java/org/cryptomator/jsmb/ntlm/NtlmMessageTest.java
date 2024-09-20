@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Base64;
-import java.util.HexFormat;
 
 class NtlmMessageTest {
 

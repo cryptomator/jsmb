@@ -16,10 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -182,65 +180,39 @@ public record Negotiator(TcpServer server, Connection connection) {
 			// TODO reauthenticate according to https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
 		}
 
+		// create response
+		var header = PacketHeader.builder();
+		header.creditCharge((char) 0);
+		header.command(Command.SESSION_SETUP.value());
+		header.creditResponse((char) 1);
+		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
+		header.nextCommand(0);
+		header.messageId(request.header().messageId());
+		header.treeId(0);
+		header.sessionId(session.sessionId);
+
+		var ntlmAuth = Authenticator.create("user", "password", "domain");
+
 		try {
 			var gssToken = NegotiationToken.parse(request.securityBuffer());
-			var ntlmToken = switch (gssToken) {
+			var ntlmMessage = switch (gssToken) {
 				case NegTokenInit initToken -> NtlmMessage.parse(MemorySegment.ofArray(initToken.getMechToken()));
 				case NegTokenResp responseToken -> NtlmMessage.parse(MemorySegment.ofArray(responseToken.getResponseToken()));
 			};
-			// TODO perform authentication: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654
-			return switch (ntlmToken) {
-				case NtlmNegotiateMessage negotiateMessage -> createSessionSetupResponseWithNtlmChallenge(request, session, negotiateMessage);
-				case NtlmAuthenticateMessage authenticateMessage -> createSessionSetupResponseWithNtlmToken(request, session, authenticateMessage);
-				case NtlmChallengeMessage _ -> throw new UnsupportedOperationException("Did not expect NTLM challenge from client");
-			};
+			var ntlmResponse = ntlmAuth.process(ntlmMessage);
+			if (ntlmResponse != null) {
+				var negTokenResp = NegTokenResp.acceptIncomplete(ntlmResponse.segment().toArray(Layouts.BYTE));
+				header.status(SMBStatus.STATUS_MORE_PROCESSING_REQUIRED);
+				var response = new SessionSetupResponse(header.build());
+				return response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
+			} else {
+				header.status(SMBStatus.STATUS_SUCCESS);
+				return new SessionSetupResponse(header.build());
+			}
 		} catch (IllegalArgumentException e) {
 			// TODO fail with status SEC_E_INVALID_TOKEN
 			throw new UnsupportedOperationException("Not yet implemented", e);
 		}
-	}
-
-	private SessionSetupResponse createSessionSetupResponseWithNtlmChallenge(SessionSetupRequest request, Session session, NtlmNegotiateMessage negotiateMessage) {
-		// TODO: move to NTLM auth utility producing token:
-		var targetInfo = List.of(
-				AVPair.create(AVPair.MSV_AV_NB_COMPUTER_NAME, "cryptomator"),
-				AVPair.create(AVPair.MSV_AV_NB_DOMAIN_NAME, "local"),
-				AVPair.create(AVPair.MSV_AV_DNS_COMPUTER_NAME, "local"),
-				AVPair.create(AVPair.MSV_AV_DNS_DOMAIN_NAME, "local"),
-				AVPair.create(AVPair.MSV_AV_TIMESTAMP, Instant.now()),
-				AVPair.create(AVPair.MSV_AV_EOL, MemorySegment.NULL)
-		);
-		var gssToken = NtlmChallengeMessage.createChallenge("target", "foobar00".getBytes(StandardCharsets.US_ASCII), targetInfo);
-		var negTokenResp = NegTokenResp.create(gssToken.segment().toArray(Layouts.BYTE));
-
-		// create response
-		var header = PacketHeader.builder();
-		header.creditCharge((char) 0);
-		header.status(SMBStatus.STATUS_MORE_PROCESSING_REQUIRED);
-		header.command(Command.SESSION_SETUP.value());
-		header.creditResponse((char) 1);
-		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
-		header.nextCommand(0);
-		header.messageId(request.header().messageId());
-		header.treeId(0);
-		header.sessionId(session.sessionId);
-		var response = new SessionSetupResponse(header.build());
-		return response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
-	}
-
-
-	private SMB2Message createSessionSetupResponseWithNtlmToken(SessionSetupRequest request, Session session, NtlmAuthenticateMessage authenticateMessage) {
-		var header = PacketHeader.builder();
-		header.creditCharge((char) 0);
-		header.status(SMBStatus.STATUS_WRONG_PASSWORD); // TODO: implement authentication, then set status accordingly
-		header.command(Command.SESSION_SETUP.value());
-		header.creditResponse((char) 1);
-		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
-		header.nextCommand(0);
-		header.messageId(request.header().messageId());
-		header.treeId(0);
-		header.sessionId(session.sessionId);
-		return new SessionSetupResponse(header.build());
 	}
 
 	private byte[] genSalt() {

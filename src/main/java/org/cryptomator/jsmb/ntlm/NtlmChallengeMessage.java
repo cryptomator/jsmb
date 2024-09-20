@@ -12,7 +12,7 @@ import java.util.List;
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/801a4681-8809-4be9-ab0d-61dcfe762786>CHALLENGE_MESSAGE</a>
  */
-public record NtlmChallengeMessage(MemorySegment segment) implements NtlmMessage {
+record NtlmChallengeMessage(MemorySegment segment) implements NtlmMessage {
 
 	public static final int MESSAGE_TYPE = 0x00000002;
 

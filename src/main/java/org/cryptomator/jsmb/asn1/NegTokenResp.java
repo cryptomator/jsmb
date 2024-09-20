@@ -1,6 +1,5 @@
 package org.cryptomator.jsmb.asn1;
 
-import java.util.Arrays;
 import java.util.HexFormat;
 
 /**
@@ -78,7 +77,12 @@ public record NegTokenResp(ASN1Node.ASN1Constructed negTokenResp) implements Neg
 		}
 	}
 
-	public static NegTokenResp create(byte[] mechToken) {
+	/**
+	 * Creates a GSS negotation token response with state <pre>accept-incomplete</pre>
+	 * @param responseToken the mechanism-specific response token (in case of this project the NTLM server challenge)
+	 * @return a NegTokenResp structure
+	 */
+	public static NegTokenResp acceptIncomplete(byte[] responseToken) {
 		var negTokenResp = ASN1Node.constructed(ASN1Id.SEQUENCE,
 				ASN1Node.constructed(ASN1Id.of(0xA0),
 						ASN1Node.primitive(ASN1Id.ENUMERATED, new byte[]{0x01}) // negState ENUMERATED accept-incomplete
@@ -87,7 +91,7 @@ public record NegTokenResp(ASN1Node.ASN1Constructed negTokenResp) implements Neg
 						ASN1Node.primitive(ASN1Id.OBJECT_IDENTIFIER, OID.NTLM)
 				),
 				ASN1Node.constructed(ASN1Id.of(0xA2),
-						ASN1Node.primitive(ASN1Id.OCTET_STRING, mechToken)
+						ASN1Node.primitive(ASN1Id.OCTET_STRING, responseToken)
 				)
 		);
 		var negotiationToken = ASN1Node.constructed(ASN1Id.of(0xA1), negTokenResp);
