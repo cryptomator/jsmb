@@ -66,8 +66,7 @@ public class Authenticator {
 	 */
 	private NtlmMessage createServerChallenge(NtlmNegotiateMessage negotiateMessage) {
 		this.negotiateMessage = negotiateMessage;
-		// TODO: take negotiate message into account when producing the challenge
-		// FIXME: this is a dummy implementation with hardcoded challenge etc
+		// FIXME: this is a dummy implementation with hardcoded domain etc
 		var targetInfo = List.of(
 				AVPair.create(AVPair.MSV_AV_NB_COMPUTER_NAME, "jsmb"),
 				AVPair.create(AVPair.MSV_AV_NB_DOMAIN_NAME, "localhost"),

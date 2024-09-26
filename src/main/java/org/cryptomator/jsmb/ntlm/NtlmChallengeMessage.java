@@ -36,7 +36,6 @@ record NtlmChallengeMessage(MemorySegment segment) implements NtlmMessage {
 		}
 		byte[] targetNameBytes = targetName.getBytes(StandardCharsets.UTF_16LE);
 		byte[] targetInfoBytes = targetInfo.stream().map(AVPair::segment).reduce(MemorySegment.NULL, MemorySegments::concat).toArray(Layouts.BYTE);
-		// TODO: add padding between targetName + targetInfo???
 
 		MemorySegment segment = MemorySegment.ofArray(new byte[56 + targetNameBytes.length + targetInfoBytes.length]);
 		segment.copyFrom(MemorySegment.ofArray(NtlmMessage.SIGNATURE)); // Signature
