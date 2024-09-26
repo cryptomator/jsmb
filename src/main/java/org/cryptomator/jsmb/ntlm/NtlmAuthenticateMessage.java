@@ -28,12 +28,24 @@ record NtlmAuthenticateMessage(MemorySegment segment) implements NtlmMessage {
 		return segment.get(Layouts.LE_INT32, 16);
 	}
 
-	public MemorySegment lmChallengeResponse() {
+	public MemorySegment lmChallengeResponseSegment() {
 		if (lmChallengeResponseLen() == 0) {
 			return MemorySegment.NULL;
 		} else {
 			return segment.asSlice(lmChallengeResponseBufferOffset(), lmChallengeResponseLen());
 		}
+	}
+
+	public byte[] lmChallengeResponse() {
+		return lmChallengeResponseSegment().toArray(Layouts.BYTE);
+	}
+
+	/**
+	 * The {@link #lmChallengeResponse()} parsed as {@link LmV2Response}.
+	 * @return LM v2 response
+	 */
+	public LmV2Response lmV2Response() {
+		return new LmV2Response(lmChallengeResponseSegment());
 	}
 
 	// NtChallengeResponseFields (8 bytes):
@@ -50,12 +62,24 @@ record NtlmAuthenticateMessage(MemorySegment segment) implements NtlmMessage {
 		return segment.get(Layouts.LE_INT32, 24);
 	}
 
-	public MemorySegment ntChallengeResponse() {
+	public MemorySegment ntChallengeResponseSegment() {
 		if (ntChallengeResponseLen() == 0) {
 			return MemorySegment.NULL;
 		} else {
 			return segment.asSlice(ntChallengeResponseBufferOffset(), ntChallengeResponseLen());
 		}
+	}
+
+	public byte[] ntChallengeResponse() {
+		return ntChallengeResponseSegment().toArray(Layouts.BYTE);
+	}
+
+	/**
+	 * The {@link #ntChallengeResponse()} parsed as {@link NtlmV2Response}.
+	 * @return NTLM v2 response
+	 */
+	public NtlmV2Response ntlmV2Response() {
+		return new NtlmV2Response(ntChallengeResponseSegment());
 	}
 
 	// DomainNameFields (8 bytes):
@@ -177,6 +201,10 @@ record NtlmAuthenticateMessage(MemorySegment segment) implements NtlmMessage {
 
 	public byte[] mic() {
 		return segment.asSlice(72, 16).toArray(Layouts.BYTE);
+	}
+
+	public void setMic(byte[] mic) {
+		segment.asSlice(72, 16).copyFrom(MemorySegment.ofArray(mic));
 	}
 
 }

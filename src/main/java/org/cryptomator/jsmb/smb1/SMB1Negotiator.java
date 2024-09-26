@@ -2,7 +2,7 @@ package org.cryptomator.jsmb.smb1;
 
 import org.cryptomator.jsmb.TcpServer;
 import org.cryptomator.jsmb.common.SMBMessage;
-import org.cryptomator.jsmb.common.SMBStatus;
+import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.smb2.*;
 import org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.SecurityMode;
@@ -30,7 +30,7 @@ public record SMB1Negotiator(TcpServer server, Connection connection) {
 			connection.supportsMultiCredit = true;
 			var header = PacketHeader.builder();
 			header.creditCharge((char) 0);
-			header.status(SMBStatus.STATUS_SUCCESS);
+			header.status(NTStatus.STATUS_SUCCESS);
 			header.command(Command.NEGOATIATE.value());
 			header.creditResponse((char) 1);
 			header.flags(SMB2Message.Flags.SERVER_TO_REDIR);

@@ -5,7 +5,8 @@ import org.cryptomator.jsmb.asn1.NegTokenInit;
 import org.cryptomator.jsmb.asn1.NegTokenInit2;
 import org.cryptomator.jsmb.asn1.NegTokenResp;
 import org.cryptomator.jsmb.asn1.NegotiationToken;
-import org.cryptomator.jsmb.common.SMBStatus;
+import org.cryptomator.jsmb.common.NTStatus;
+import org.cryptomator.jsmb.common.NTStatusException;
 import org.cryptomator.jsmb.ntlm.*;
 import org.cryptomator.jsmb.smb2.negotiate.*;
 import org.cryptomator.jsmb.util.Bytes;
@@ -32,6 +33,8 @@ import java.util.List;
 public record Negotiator(TcpServer server, Connection connection) {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Negotiator.class);
+
+	private static final Authenticator ntlmAuth = Authenticator.create("user", "password", "localhost"); // FIXME hardcoded stuff
 
 	public SMB2Message negotiate(NegotiateRequest request) {
 		if (connection.negotiateDialect != 0xFFFF) {
@@ -92,7 +95,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		// create response
 		var header = PacketHeader.builder();
 		header.creditCharge((char) 0);
-		header.status(SMBStatus.STATUS_SUCCESS);
+		header.status(NTStatus.STATUS_SUCCESS);
 		header.command(Command.NEGOATIATE.value());
 		header.creditResponse((char) 1);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
@@ -191,8 +194,6 @@ public record Negotiator(TcpServer server, Connection connection) {
 		header.treeId(0);
 		header.sessionId(session.sessionId);
 
-		var ntlmAuth = Authenticator.create("user", "password", "domain");
-
 		try {
 			var gssToken = NegotiationToken.parse(request.securityBuffer());
 			var ntlmMessage = switch (gssToken) {
@@ -202,16 +203,20 @@ public record Negotiator(TcpServer server, Connection connection) {
 			var ntlmResponse = ntlmAuth.process(ntlmMessage);
 			if (ntlmResponse != null) {
 				var negTokenResp = NegTokenResp.acceptIncomplete(ntlmResponse.segment().toArray(Layouts.BYTE));
-				header.status(SMBStatus.STATUS_MORE_PROCESSING_REQUIRED);
+				header.status(NTStatus.STATUS_MORE_PROCESSING_REQUIRED);
 				var response = new SessionSetupResponse(header.build());
 				return response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
 			} else {
-				header.status(SMBStatus.STATUS_SUCCESS);
+				header.status(NTStatus.STATUS_SUCCESS);
 				return new SessionSetupResponse(header.build());
 			}
 		} catch (IllegalArgumentException e) {
 			// TODO fail with status SEC_E_INVALID_TOKEN
 			throw new UnsupportedOperationException("Not yet implemented", e);
+		} catch (NTStatusException e) {
+			// TODO log?
+			header.status(e.status);
+			return new SessionSetupResponse(header.build());
 		}
 	}
 

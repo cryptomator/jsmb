@@ -5,6 +5,8 @@ import org.cryptomator.jsmb.util.MemorySegments;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.List;
 
 /**
@@ -14,12 +16,21 @@ import java.util.List;
  */
 record NtlmChallengeMessage(MemorySegment segment) implements NtlmMessage {
 
+	private static final int CHALLENGE_LENGTH = 8;
+
+	public static final int WANTED_NEG_FLAGS = NegotiateFlags.NTLMSSP_NEGOTIATE_KEY_EXCH
+			| NegotiateFlags.NTLMSSP_NEGOTIATE_128
+			| NegotiateFlags.NTLMSSP_NEGOTIATE_VERSION
+			| NegotiateFlags.NTLMSSP_NEGOTIATE_TARGET_INFO
+			| NegotiateFlags.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY
+			| NegotiateFlags.NTLMSSP_NEGOTIATE_ALWAYS_SIGN
+			| NegotiateFlags.NTLMSSP_NEGOTIATE_SIGN
+			| NegotiateFlags.NTLMSSP_NEGOTIATE_SEAL
+			| NegotiateFlags.NTLMSSP_REQUEST_TARGET
+			| NegotiateFlags.NTLMSSP_NEGOTIATE_UNICODE;
 	public static final int MESSAGE_TYPE = 0x00000002;
 
-	public static NtlmNegotiateMessage createChallenge(String targetName, byte[] serverChallenge, List<AVPair> targetInfo) {
-		if (serverChallenge.length != 8) {
-			throw new IllegalArgumentException("Server challenge must be 8 bytes long.");
-		}
+	public static NtlmChallengeMessage createChallenge(String targetName, List<AVPair> targetInfo, int flags) {
 		if (targetInfo.getLast().avId() != AVPair.MSV_AV_EOL) {
 			throw new IllegalArgumentException("Last AV pair must be EOL.");
 		}
@@ -37,20 +48,16 @@ record NtlmChallengeMessage(MemorySegment segment) implements NtlmMessage {
 		segment.set(Layouts.LE_INT32, 16, 56); // TargetNameBufferOffset
 
 		// Flags
-		int flags = NegotiateFlags.NTLMSSP_NEGOTIATE_KEY_EXCH
-				| NegotiateFlags.NTLMSSP_NEGOTIATE_128
-				| NegotiateFlags.NTLMSSP_NEGOTIATE_VERSION
-				| NegotiateFlags.NTLMSSP_NEGOTIATE_TARGET_INFO
-				| NegotiateFlags.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY
-				| NegotiateFlags.NTLMSSP_NEGOTIATE_ALWAYS_SIGN
-				| NegotiateFlags.NTLMSSP_NEGOTIATE_NTLM
-				| NegotiateFlags.NTLMSSP_NEGOTIATE_SIGN
-				| NegotiateFlags.NTLMSSP_REQUEST_TARGET
-				| NegotiateFlags.NTLMSSP_NEGOTIATE_UNICODE;
 		segment.set(Layouts.LE_INT32, 20, flags);
 
 		// ServerChallenge:
-		segment.asSlice(24, 8).copyFrom(MemorySegment.ofArray(serverChallenge));
+		try {
+			byte[] serverChallenge = new byte[CHALLENGE_LENGTH];
+			SecureRandom.getInstanceStrong().nextBytes(serverChallenge);
+			segment.asSlice(24, 8).copyFrom(MemorySegment.ofArray(serverChallenge));
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException("SecureRandom not found", e);
+		}
 
 		// TargetInfoFields:
 		segment.set(Layouts.LE_UINT16, 40, (char) targetInfoBytes.length); // TargetInfoLen
@@ -67,7 +74,15 @@ record NtlmChallengeMessage(MemorySegment segment) implements NtlmMessage {
 		segment.asSlice(56, targetNameBytes.length).copyFrom(MemorySegment.ofArray(targetNameBytes)); // TargetName
 		segment.asSlice(56 + targetNameBytes.length, targetInfoBytes.length).copyFrom(MemorySegment.ofArray(targetInfoBytes)); // TargetInfo
 
-		return new NtlmNegotiateMessage(segment);
+		return new NtlmChallengeMessage(segment);
+	}
+
+	public byte[] serverChallenge() {
+		return segment.asSlice(24, 8).toArray(Layouts.BYTE);
+	}
+
+	public int negotiateFlags() {
+		return segment.get(Layouts.LE_INT32, 20);
 	}
 
 }

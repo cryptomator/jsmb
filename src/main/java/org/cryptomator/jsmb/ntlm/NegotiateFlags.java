@@ -4,7 +4,7 @@ package org.cryptomator.jsmb.ntlm;
  * Flags used in the NEGOTIATE_MESSAGE.
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/99d90ff4-957f-4c8a-80e4-5bfe5a9a9832">NEGOTIATE_MESSAGE</a>
  */
-public interface NegotiateFlags {
+interface NegotiateFlags {
 
 	int NTLMSSP_NEGOTIATE_56 = 0x8000_0000;
 	int NTLMSSP_NEGOTIATE_KEY_EXCH = 0x4000_0000;
@@ -36,4 +36,8 @@ public interface NegotiateFlags {
 
 	int NTLMSSP_NEGOTIATE_OEM = 0x0000_0002;
 	int NTLMSSP_NEGOTIATE_UNICODE = 0x0000_0001;
+
+	static boolean isSet(int flags, int flag) {
+		return (flags & flag) == flag;
+	}
 }

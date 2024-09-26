@@ -39,4 +39,8 @@ public sealed interface NtlmMessage permits NtlmNegotiateMessage, NtlmChallengeM
 			default -> throw new IllegalArgumentException("Unknown NTLM message type: " + messageType);
 		};
 	}
+
+	default byte[] toByteArray() {
+		return segment().toArray(Layouts.BYTE);
+	}
 }
