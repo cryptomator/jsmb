@@ -30,8 +30,8 @@ public class MemorySegments {
 	 * @throws IllegalArgumentException If the resulting MemorySegment is too large to create (backed by a byte[])
 	 */
 	public static MemorySegment concat(MemorySegment left, MemorySegment right) {
-		long size = left.byteSize() + right.byteSize();
-		if (size > Integer.MAX_VALUE || size < 0) {
+		long size = Math.addExact(left.byteSize() + right.byteSize());
+		if (size > Integer.MAX_VALUE) {
 			throw new IllegalArgumentException("MemorySegment too large to concat");
 		}
 		var result = MemorySegment.ofArray(new byte[(int) size]);
