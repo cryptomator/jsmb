@@ -30,7 +30,7 @@ public class MemorySegments {
 	 * @throws IllegalArgumentException If the resulting MemorySegment is too large to create (backed by a byte[])
 	 */
 	public static MemorySegment concat(MemorySegment left, MemorySegment right) {
-		long size = Math.addExact(left.byteSize() + right.byteSize());
+		long size = Math.addExact(left.byteSize(), right.byteSize());
 		if (size > Integer.MAX_VALUE) {
 			throw new IllegalArgumentException("MemorySegment too large to concat");
 		}
