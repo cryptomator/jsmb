@@ -6,17 +6,8 @@ import org.cryptomator.jsmb.util.Layouts;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.Mac;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.spec.SecretKeySpec;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
-import java.security.InvalidKeyException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -28,8 +19,6 @@ import static org.cryptomator.jsmb.ntlmv2.NegotiateFlags.isSet;
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/5e550938-91d4-459f-b67d-75d70009e3f3">NTLM v2 Authentication</a>
  */
 public class Authenticator {
-
-	private static final String HMAC_MD5_ALGORITHM = "HmacMD5";
 
 	private final byte[] responseKeyNT;
 	private final byte[] responseKeyLM;
@@ -104,11 +93,11 @@ public class Authenticator {
 		var negFlg = challengeMessage.negotiateFlags();
 		byte[] exportedSessionKey;
 		if (isSet(negFlg, NegotiateFlags.NTLMSSP_NEGOTIATE_KEY_EXCH) && (isSet(negFlg, NegotiateFlags.NTLMSSP_NEGOTIATE_SIGN) || isSet(negFlg, NegotiateFlags.NTLMSSP_NEGOTIATE_SEAL))) {
-			exportedSessionKey = arc4(keyExchangeKey, authenticateMessage.encryptedRandomSessionKey());
+			exportedSessionKey = Crypto.arc4(keyExchangeKey, authenticateMessage.encryptedRandomSessionKey());
 		} else {
 			exportedSessionKey = keyExchangeKey;
 		}
-		var mic = hmacMd5(exportedSessionKey, Bytes.concat(negotiateMessage.toByteArray(), challengeMessage.toByteArray(), authenticateMessage.toByteArray()));
+		var mic = Crypto.hmacMd5(exportedSessionKey, Bytes.concat(negotiateMessage.toByteArray(), challengeMessage.toByteArray(), authenticateMessage.toByteArray()));
 
 		// if MIC is present, check if:
 		var authenticateMessageFlags = authenticateMessage.ntlmV2Response().avPairs().get(AVPair.MSV_AV_FLAGS);
@@ -151,8 +140,8 @@ public class Authenticator {
 	}
 
 	public static byte[] NTOWFv2(String passwd, String user, String userDom) {
-		byte[] md4Hash = md4(passwd.getBytes(StandardCharsets.UTF_16LE));
-		return hmacMd5(md4Hash, (user.toUpperCase() + userDom).getBytes(StandardCharsets.UTF_16LE));
+		byte[] md4Hash = Crypto.md4(passwd.getBytes(StandardCharsets.UTF_16LE));
+		return Crypto.hmacMd5(md4Hash, (user.toUpperCase() + userDom).getBytes(StandardCharsets.UTF_16LE));
 	}
 
 	public static byte[] LMOWFv2(String passwd, String user, String userDom) {
@@ -173,48 +162,11 @@ public class Authenticator {
 	private static AuthResponse computeResponse(byte[] responseKeyNT, byte[] responseKeyLM, byte[] serverChallenge, byte[] clientChallenge, byte[] time, byte[] avPairs) {
 		byte[] responseVersion = new byte[]{1, 1}; // Responserversion, HiResponserversion
 		byte[] temp = Bytes.concat(responseVersion, new byte[6], time, clientChallenge, new byte[4], avPairs); // omitting the last 4 zero bytes mentioned in the linked documentation, as avPairs include EOL already
-		byte[] ntProofStr = hmacMd5(responseKeyNT, Bytes.concat(serverChallenge, temp));
+		byte[] ntProofStr = Crypto.hmacMd5(responseKeyNT, Bytes.concat(serverChallenge, temp));
 		byte[] ntChallengeResponse = Bytes.concat(ntProofStr, temp);
-		byte[] lmChallengeResponse = Bytes.concat(hmacMd5(responseKeyLM, Bytes.concat(serverChallenge, clientChallenge)), clientChallenge);
-		byte[] sessionBaseKey = hmacMd5(responseKeyNT, ntProofStr);
+		byte[] lmChallengeResponse = Bytes.concat(Crypto.hmacMd5(responseKeyLM, Bytes.concat(serverChallenge, clientChallenge)), clientChallenge);
+		byte[] sessionBaseKey = Crypto.hmacMd5(responseKeyNT, ntProofStr);
 		return new AuthResponse(ntChallengeResponse, lmChallengeResponse, sessionBaseKey);
-	}
-
-	private static byte[] md4(byte[] input) {
-		try {
-			MessageDigest md = MessageDigest.getInstance(LegacyCryptoProvider.MD4, LegacyCryptoProvider.INSTANCE);
-			return md.digest(input);
-		} catch (NoSuchAlgorithmException e) {
-			throw new IllegalStateException("MD4 not found", e);
-		}
-	}
-
-	private static byte[] hmacMd5(byte[] key, byte[] data) {
-		try {
-			Mac mac = Mac.getInstance(HMAC_MD5_ALGORITHM);
-			SecretKeySpec keySpec = new SecretKeySpec(key, HMAC_MD5_ALGORITHM);
-			mac.init(keySpec);
-			return mac.doFinal(data);
-		} catch (InvalidKeyException e) {
-			// RFC 2104, Section 3 states that HMAC keys may be of any length, as long as they are not empty
-			throw new IllegalArgumentException("HMAC key is empty", e);
-		} catch (NoSuchAlgorithmException e) {
-			throw new IllegalStateException("HmacMD5 not found", e);
-		}
-	}
-
-	private static byte[] arc4(byte[] key, byte[] data) {
-		try {
-			Cipher cipher = Cipher.getInstance("ARCFOUR");
-			cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "ARCFOUR"));
-			return cipher.doFinal(data);
-		} catch (NoSuchPaddingException | NoSuchAlgorithmException e) {
-			throw new IllegalStateException("ARCFOUR not found", e);
-		} catch (IllegalBlockSizeException | BadPaddingException e) {
-			throw new IllegalStateException("ARCFOUR is a stream cipher, no blocks, no paddings", e);
-		} catch (InvalidKeyException e) {
-			throw new IllegalArgumentException("Unsuitable key", e); // should not happen, as key is known to be 128 bit
-		}
 	}
 
 	record AuthResponse(byte[] ntChallengeResponse, byte[] lmChallengeResponse, byte[] sessionBaseKey) {
