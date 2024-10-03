@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb.smb2;
 
+import org.cryptomator.jsmb.ntlmv2.NtlmSession;
 import org.jetbrains.annotations.Range;
 
 import java.time.Instant;
@@ -22,6 +23,7 @@ public class Session {
 	public final long sessionId;
 	public final long sessionGlobalId;
 	public final Connection connection;
+	public NtlmSession ntlmSession;
 
 	private Session(Connection connection, @Range(from = 1L, to = Long.MAX_VALUE) long sessionId) {
 		if (sessionId < 1) {
@@ -31,6 +33,7 @@ public class Session {
 		this.connection = connection;
 		this.sessionId = sessionId;
 		this.sessionGlobalId = sessionId;
+		this.ntlmSession = NtlmSession.create();
 	}
 
 	public State state;

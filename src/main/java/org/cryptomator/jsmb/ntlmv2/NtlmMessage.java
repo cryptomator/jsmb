@@ -5,7 +5,7 @@ import org.cryptomator.jsmb.util.Layouts;
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 
-public sealed interface NtlmMessage permits NtlmNegotiateMessage, NtlmChallengeMessage, NtlmAuthenticateMessage {
+sealed interface NtlmMessage permits NtlmNegotiateMessage, NtlmChallengeMessage, NtlmAuthenticateMessage {
 
 	byte[] SIGNATURE = new byte[] { (byte) 'N', (byte) 'T', (byte) 'L', (byte) 'M', (byte) 'S', (byte) 'S', (byte) 'P', 0 };
 	byte NTLMSSP_REVISION_W2K3 = 0x0F;

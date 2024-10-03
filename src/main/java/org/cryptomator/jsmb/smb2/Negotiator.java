@@ -7,8 +7,7 @@ import org.cryptomator.jsmb.asn1.NegTokenResp;
 import org.cryptomator.jsmb.asn1.NegotiationToken;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.common.NTStatusException;
-import org.cryptomator.jsmb.ntlmv2.Authenticator;
-import org.cryptomator.jsmb.ntlmv2.NtlmMessage;
+import org.cryptomator.jsmb.ntlmv2.NtlmSession;
 import org.cryptomator.jsmb.smb2.negotiate.CompressionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.EncryptionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities;
@@ -42,8 +41,6 @@ import java.util.List;
 public record Negotiator(TcpServer server, Connection connection) {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Negotiator.class);
-
-	private static final Authenticator ntlmAuth = Authenticator.create("user", "password", "localhost"); // FIXME hardcoded stuff
 
 	public SMB2Message negotiate(NegotiateRequest request) {
 		if (connection.negotiateDialect != 0xFFFF) {
@@ -204,20 +201,27 @@ public record Negotiator(TcpServer server, Connection connection) {
 		header.sessionId(session.sessionId);
 
 		try {
-			var gssToken = NegotiationToken.parse(request.securityBuffer());
+			var gssToken = NegotiationToken.parse(request.securityBuffer()); // security buffer MUST contain a GSS output token, see https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/8b90c335-5a64-4238-9813-84bd734599eb
 			var ntlmMessage = switch (gssToken) {
-				case NegTokenInit initToken -> NtlmMessage.parse(MemorySegment.ofArray(initToken.getMechToken()));
-				case NegTokenResp responseToken -> NtlmMessage.parse(MemorySegment.ofArray(responseToken.getResponseToken()));
+				case NegTokenInit initToken -> initToken.getMechToken();
+				case NegTokenResp responseToken -> responseToken.getResponseToken();
 			};
-			var ntlmResponse = ntlmAuth.process(ntlmMessage);
-			if (ntlmResponse != null) {
-				var negTokenResp = NegTokenResp.acceptIncomplete(ntlmResponse.segment().toArray(Layouts.BYTE));
-				header.status(NTStatus.STATUS_MORE_PROCESSING_REQUIRED);
-				var response = new SessionSetupResponse(header.build());
-				return response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
-			} else {
-				header.status(NTStatus.STATUS_SUCCESS);
-				return new SessionSetupResponse(header.build());
+			switch (session.ntlmSession) {
+				case NtlmSession.Initial s -> {
+					var awaitingAuthentication = s.negotiate(ntlmMessage);
+					var negTokenResp = NegTokenResp.acceptIncomplete(awaitingAuthentication.serverChallenge());
+					header.status(NTStatus.STATUS_MORE_PROCESSING_REQUIRED);
+					var response = new SessionSetupResponse(header.build());
+					session.ntlmSession = awaitingAuthentication;
+					return response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
+				}
+				case NtlmSession.AwaitingAuthentication s -> {
+					var authenticated = s.authenticate(ntlmMessage, "user", "password", "domain"); // FIXME hardcoded credentials
+					header.status(NTStatus.STATUS_SUCCESS);
+					session.ntlmSession = authenticated;
+					return new SessionSetupResponse(header.build());
+				}
+				case NtlmSession.Authenticated _ -> throw new IllegalStateException("Session already authenticated");
 			}
 		} catch (IllegalArgumentException e) {
 			// TODO fail with status SEC_E_INVALID_TOKEN
