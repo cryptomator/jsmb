@@ -57,6 +57,11 @@ public record NegTokenInit(ASN1Node.ASN1Constructed negTokenInit) implements Neg
 		}
 	}
 
+	@Override
+	public byte[] token() {
+		return getMechToken();
+	}
+
 	// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/b34032e5-3aae-4bc6-84c3-c6d80eadf7f2
 	public byte[] getMechToken() {
 		var node = getMechTokenNode().findChildWithId(ASN1Id.OCTET_STRING);

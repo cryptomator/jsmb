@@ -202,13 +202,9 @@ public record Negotiator(TcpServer server, Connection connection) {
 
 		try {
 			var gssToken = NegotiationToken.parse(request.securityBuffer()); // security buffer MUST contain a GSS output token, see https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/8b90c335-5a64-4238-9813-84bd734599eb
-			var ntlmMessage = switch (gssToken) {
-				case NegTokenInit initToken -> initToken.getMechToken();
-				case NegTokenResp responseToken -> responseToken.getResponseToken();
-			};
 			switch (session.ntlmSession) {
 				case NtlmSession.Initial s -> {
-					var awaitingAuthentication = s.negotiate(ntlmMessage);
+					var awaitingAuthentication = s.negotiate(gssToken.token());
 					var negTokenResp = NegTokenResp.acceptIncomplete(awaitingAuthentication.serverChallenge());
 					header.status(NTStatus.STATUS_MORE_PROCESSING_REQUIRED);
 					var response = new SessionSetupResponse(header.build());
@@ -216,7 +212,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 					return response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
 				}
 				case NtlmSession.AwaitingAuthentication s -> {
-					var authenticated = s.authenticate(ntlmMessage, "user", "password", "domain"); // FIXME hardcoded credentials
+					var authenticated = s.authenticate(gssToken.token(), "user", "password", "domain"); // FIXME hardcoded credentials
 					header.status(NTStatus.STATUS_SUCCESS);
 					session.ntlmSession = authenticated;
 					return new SessionSetupResponse(header.build());

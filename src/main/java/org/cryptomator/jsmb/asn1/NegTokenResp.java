@@ -59,6 +59,11 @@ public record NegTokenResp(ASN1Node.ASN1Constructed negTokenResp) implements Neg
 		}
 	}
 
+	@Override
+	public byte[] token() {
+		return getResponseToken();
+	}
+
 	public byte[] getResponseToken() {
 		var node = getResponseTokenNode().findChildWithId(ASN1Id.OCTET_STRING);
 		if (node instanceof ASN1Node.ASN1Primitive p) {

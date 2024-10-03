@@ -18,6 +18,15 @@ public sealed interface NegotiationToken permits NegTokenInit, NegTokenResp {
 	byte[] NEG_TOKEN_INIT_TAG = {(byte) 0xA0};
 	byte[] NEG_TOKEN_RESP_TAG = {(byte) 0xA1};
 
+	/**
+	 * The mechanism-specific token.
+	 * <p>
+	 * In case of NTLM, a {@link NegTokenInit#getMechToken()} is expected to hold a NEGOTIATE_MESSAGE,
+	 * while a {@link NegTokenResp#getResponseToken()} holds a CHALLENGE_MESSAGE or an AUTHENTICATE_MESSAGE.
+	 * @return The mechanism-specific token
+	 */
+	byte[] token();
+
 	static NegotiationToken parse(byte[] token) {
 		ASN1Node node = ASN1Node.parse(ByteBuffer.wrap(token));
 		if (node instanceof ASN1Node.ASN1Constructed constructed) {
