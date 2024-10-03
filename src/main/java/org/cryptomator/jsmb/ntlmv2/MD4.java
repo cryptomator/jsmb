@@ -17,7 +17,7 @@
  *  under the License.
  *
  */
-package org.cryptomator.jsmb.ntlm;
+package org.cryptomator.jsmb.ntlmv2;
 
 import java.security.DigestException;
 import java.security.MessageDigestSpi;

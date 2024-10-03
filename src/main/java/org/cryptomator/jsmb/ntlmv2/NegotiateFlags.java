@@ -1,4 +1,4 @@
-package org.cryptomator.jsmb.ntlm;
+package org.cryptomator.jsmb.ntlmv2;
 
 /**
  * Flags used in the NEGOTIATE_MESSAGE.

@@ -1,4 +1,4 @@
-package org.cryptomator.jsmb.ntlm;
+package org.cryptomator.jsmb.ntlmv2;
 
 import java.security.Provider;
 

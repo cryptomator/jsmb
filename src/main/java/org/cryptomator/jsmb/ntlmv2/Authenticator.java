@@ -1,4 +1,4 @@
-package org.cryptomator.jsmb.ntlm;
+package org.cryptomator.jsmb.ntlmv2;
 
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.util.Bytes;
@@ -21,7 +21,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.cryptomator.jsmb.ntlm.NegotiateFlags.isSet;
+import static org.cryptomator.jsmb.ntlmv2.NegotiateFlags.isSet;
 
 /**
  *

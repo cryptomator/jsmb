@@ -1,10 +1,8 @@
-package org.cryptomator.jsmb.ntlm;
+package org.cryptomator.jsmb.ntlmv2;
 
 import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
-import java.util.Collections;
-import java.util.SequencedMap;
 
 /**
  * The LMv2_RESPONSE structure defines the NTLM v2 authentication transported in {@link NtlmAuthenticateMessage#lmChallengeResponse()}.

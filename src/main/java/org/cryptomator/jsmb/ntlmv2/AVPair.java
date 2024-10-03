@@ -1,4 +1,4 @@
-package org.cryptomator.jsmb.ntlm;
+package org.cryptomator.jsmb.ntlmv2;
 
 import org.cryptomator.jsmb.util.Layouts;
 import org.cryptomator.jsmb.util.MemorySegments;
