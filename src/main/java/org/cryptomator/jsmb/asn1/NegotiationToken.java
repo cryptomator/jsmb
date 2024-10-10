@@ -21,8 +21,8 @@ public sealed interface NegotiationToken permits NegTokenInit, NegTokenResp {
 	/**
 	 * The mechanism-specific token.
 	 * <p>
-	 * In case of NTLM, a {@link NegTokenInit#getMechToken()} is expected to hold a NEGOTIATE_MESSAGE,
-	 * while a {@link NegTokenResp#getResponseToken()} holds a CHALLENGE_MESSAGE or an AUTHENTICATE_MESSAGE.
+	 * In case of NTLM, {@link NegTokenInit#getMechToken()} is expected to hold a NEGOTIATE_MESSAGE,
+	 * while {@link NegTokenResp#getResponseToken()} holds a CHALLENGE_MESSAGE or an AUTHENTICATE_MESSAGE.
 	 * @return The mechanism-specific token
 	 */
 	byte[] token();
