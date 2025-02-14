@@ -1,19 +1,12 @@
 package org.cryptomator.jsmb.ntlmv2;
 
-import org.cryptomator.jsmb.util.Layouts;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import javax.security.auth.callback.*;
-import javax.security.sasl.RealmCallback;
-import javax.security.sasl.Sasl;
-import javax.security.sasl.SaslClient;
-import javax.security.sasl.SaslException;
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Map;
 
 // to be run with `--add-reads org.cryptomator.jsmb=java.security.sasl`
 class AuthenticatorTest {
