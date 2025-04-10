@@ -39,15 +39,15 @@ public sealed interface NtlmSession permits NtlmSession.Initial, NtlmSession.Awa
 			// FIXME: this is a dummy implementation with hardcoded domain etc
 			var targetInfo = List.of(
 					AVPair.create(AVPair.MSV_AV_NB_COMPUTER_NAME, "jsmb"),
-					AVPair.create(AVPair.MSV_AV_NB_DOMAIN_NAME, "localhost"),
+					AVPair.create(AVPair.MSV_AV_NB_DOMAIN_NAME, "jsmb"),
 					AVPair.create(AVPair.MSV_AV_DNS_COMPUTER_NAME, "jsmb"),
-					AVPair.create(AVPair.MSV_AV_DNS_DOMAIN_NAME, "localhost"),
+					AVPair.create(AVPair.MSV_AV_DNS_DOMAIN_NAME, ""),
 					AVPair.create(AVPair.MSV_AV_TIMESTAMP, Instant.now()),
 					AVPair.create(AVPair.MSV_AV_EOL, MemorySegment.NULL)
 			);
 			int flags = negotiateMessage.negotiateFlags() & NtlmChallengeMessage.WANTED_NEG_FLAGS;
-			flags |= NegotiateFlags.NTLMSSP_NEGOTIATE_ALWAYS_SIGN | NegotiateFlags.NTLMSSP_REQUEST_TARGET | NegotiateFlags.NTLMSSP_NEGOTIATE_ALWAYS_SIGN;
-			var challengeMessage = NtlmChallengeMessage.createChallenge("localhost", targetInfo, flags);
+			flags |= NegotiateFlags.NTLMSSP_TARGET_TYPE_SERVER | NegotiateFlags.NTLMSSP_NEGOTIATE_TARGET_INFO | NegotiateFlags.NTLMSSP_NEGOTIATE_NTLM | NegotiateFlags.NTLMSSP_NEGOTIATE_ALWAYS_SIGN | NegotiateFlags.NTLMSSP_REQUEST_TARGET | NegotiateFlags.NTLMSSP_NEGOTIATE_ALWAYS_SIGN;
+			var challengeMessage = NtlmChallengeMessage.createChallenge("jsmb", targetInfo, flags);
 			return new AwaitingAuthentication(negotiateMessage, challengeMessage);
 		}
 
@@ -88,7 +88,7 @@ public sealed interface NtlmSession permits NtlmSession.Initial, NtlmSession.Awa
 				throw new IllegalArgumentException("Expected AUTHENTICATE_MESSAGE, got " + msg);
 			}
 
-			if (authenticateMessage.ntChallengeResponseLen() < 24) {
+			if (authenticateMessage.ntChallengeResponseLen() <= 24) {
 				throw new AuthenticationFailedException(NTStatus.STATUS_NOT_SUPPORTED, "Only NTLMv2 is supported");
 			}
 			var response = Authenticator.ntlmV2Auth(challengeMessage, authenticateMessage, user, password, domain);

@@ -103,4 +103,14 @@ public record NegTokenResp(ASN1Node.ASN1Constructed negTokenResp) implements Neg
 		return new NegTokenResp(negotiationToken);
 	}
 
+	public static NegTokenResp acceptCompleted() {
+		var negTokenResp = ASN1Node.constructed(ASN1Id.SEQUENCE,
+				ASN1Node.constructed(ASN1Id.of(0xA0),
+						ASN1Node.primitive(ASN1Id.ENUMERATED, new byte[]{0x00}) // negState ENUMERATED accept-incomplete
+				)
+		);
+		var negotiationToken = ASN1Node.constructed(ASN1Id.of(0xA1), negTokenResp);
+		return new NegTokenResp(negotiationToken);
+	}
+
 }

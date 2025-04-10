@@ -212,10 +212,10 @@ public record Negotiator(TcpServer server, Connection connection) {
 					return response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
 				}
 				case NtlmSession.AwaitingAuthentication s -> {
-					var authenticated = s.authenticate(gssToken.token(), "user", "password", "domain"); // FIXME hardcoded credentials
+					var authenticated = s.authenticate(gssToken.token(), "user", "password", "DOMAIN"); // FIXME hardcoded credentials
 					header.status(NTStatus.STATUS_SUCCESS);
 					session.ntlmSession = authenticated;
-					return new SessionSetupResponse(header.build());
+					return new SessionSetupResponse(header.build()).withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
 				}
 				case NtlmSession.Authenticated _ -> throw new IllegalStateException("Session already authenticated");
 			}
