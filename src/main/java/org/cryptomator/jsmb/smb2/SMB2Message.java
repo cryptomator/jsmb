@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.common.SMBMessage;
+import org.cryptomator.jsmb.smb2.crypto.MessageSigner;
 import org.cryptomator.jsmb.util.Bytes;
 import org.cryptomator.jsmb.util.Layouts;
 
@@ -31,6 +32,11 @@ public interface SMB2Message extends SMBMessage {
 
 	default byte[] serialize() {
 		return Bytes.concat(header().segment().toArray(Layouts.BYTE), segment().toArray(Layouts.BYTE));
+	}
+
+	default SMB2Message sign(MessageSigner signer) {
+		record SignedMessage(PacketHeader header, MemorySegment segment) implements SMB2Message {}
+		return new SignedMessage(signer.sign(this), segment());
 	}
 
 }

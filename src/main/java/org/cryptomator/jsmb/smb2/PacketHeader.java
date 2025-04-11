@@ -80,4 +80,9 @@ public record PacketHeader(MemorySegment segment) {
 	public byte[] signature() {
 		return segment.asSlice(48, 16).toArray(Layouts.BYTE);
 	}
+
+	public PacketHeaderBuilder copy() {
+		return new PacketHeaderBuilder(this);
+	}
+
 }

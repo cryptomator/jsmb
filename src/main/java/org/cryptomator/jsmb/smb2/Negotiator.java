@@ -7,6 +7,8 @@ import org.cryptomator.jsmb.asn1.NegotiationToken;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.common.NTStatusException;
 import org.cryptomator.jsmb.ntlmv2.NtlmSession;
+import org.cryptomator.jsmb.smb2.crypto.MessageSigner;
+import org.cryptomator.jsmb.smb2.crypto.NistSP800108KDF;
 import org.cryptomator.jsmb.smb2.negotiate.CompressionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.EncryptionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities;
@@ -22,6 +24,7 @@ import org.cryptomator.jsmb.util.WinFileTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -213,8 +216,15 @@ public record Negotiator(TcpServer server, Connection connection) {
 				case NtlmSession.AwaitingAuthentication s -> {
 					var authenticated = s.authenticate(gssToken.token(), "user", "password", "DOMAIN"); // FIXME hardcoded credentials
 					header.status(NTStatus.STATUS_SUCCESS);
+					header.creditResponse((char) 8192);
+					// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654
 					session.ntlmSession = authenticated;
-					return new SessionSetupResponse(header.build()).withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
+					session.sessionKey = authenticated.exportedSessionKey(); // step 6
+					session.fullSessionKey = session.sessionKey;
+					session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
+					session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
+					var response = new SessionSetupResponse(header.build()).withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
+					return response; //.sign(new MessageSigner(session));
 				}
 				case NtlmSession.Authenticated _ -> throw new IllegalStateException("Session already authenticated");
 			}

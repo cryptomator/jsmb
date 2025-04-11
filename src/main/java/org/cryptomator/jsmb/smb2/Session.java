@@ -49,6 +49,8 @@ public class Session {
 	public List<?> channelList = new ArrayList<>();
 	public byte[] preauthIntegrityHashValue;
 	public byte[] fullSessionKey = null;
+	public byte[] signingKey = null;
+	public byte[] applicationKey = null;
 
 	/**
 	 * Creates a new session and registers it with the given connection.

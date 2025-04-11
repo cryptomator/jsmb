@@ -15,6 +15,11 @@ public record PacketHeaderBuilder(MemorySegment segment) {
 		this(MemorySegment.ofArray(new byte[PacketHeader.STRUCTURE_SIZE]));
 	}
 
+	public PacketHeaderBuilder(PacketHeader header) {
+		this();
+		segment.copyFrom(header.segment());
+	}
+
 	public PacketHeaderBuilder creditCharge(char creditCharge) {
 		segment.set(Layouts.LE_UINT16, 6, creditCharge);
 		return this;
