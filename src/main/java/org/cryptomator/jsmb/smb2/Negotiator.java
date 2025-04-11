@@ -1,7 +1,6 @@
 package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.TcpServer;
-import org.cryptomator.jsmb.asn1.NegTokenInit;
 import org.cryptomator.jsmb.asn1.NegTokenInit2;
 import org.cryptomator.jsmb.asn1.NegTokenResp;
 import org.cryptomator.jsmb.asn1.NegotiationToken;
@@ -18,17 +17,17 @@ import org.cryptomator.jsmb.smb2.negotiate.SecurityMode;
 import org.cryptomator.jsmb.smb2.negotiate.SigningCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.TransportCapabilities;
 import org.cryptomator.jsmb.util.Bytes;
-import org.cryptomator.jsmb.util.Layouts;
 import org.cryptomator.jsmb.util.UInt16;
 import org.cryptomator.jsmb.util.WinFileTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.foreign.MemorySegment;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
 
 /**
  * Processes the SMB 2 negotiation request and returns the negotiation response.
@@ -45,12 +44,13 @@ public record Negotiator(TcpServer server, Connection connection) {
 	public SMB2Message negotiate(NegotiateRequest request) {
 		if (connection.negotiateDialect != 0xFFFF) {
 			// TODO disconnect without replying as per spec
+			throw new UnsupportedOperationException("Disconnect not yet implemented");
 		}
 		if (request.dialectCount() == 0) {
-			// TODO fail with STATUS_INVALID_PARAMETER
+			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
 		}
 		if (!request.supportsDialect(Dialects.SMB3_1_1)) {
-			// TODO fail with STATUS_NOT_SUPPORTED
+			return ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
 		}
 		connection.clientGuid = request.clientGuid();
 		connection.clientCapabilities = request.capabilities();
@@ -68,7 +68,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		var preauth = request.negotiateContext(PreauthIntegrityCapabilities.class); // 3.1.1 MUST include this
 		connection.preauthIntegrityHashId = preauth.hashAlgorithms()[0];
 		if (!HashAlgorithm.isSupported(connection.preauthIntegrityHashId)) {
-			// TODO fail with STATUS_SMB_NO_PREAUTH_INTEGRITY_HASH_OVERLAP
+			return ErrorResponse.create(request, NTStatus.STATUS_SMB_NO_PREAUTH_INTEGRITY_HASH_OVERLAP);
 		}
 		var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
 		connection.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(connection.preauthIntegrityHashValue, request.serialize()));
@@ -79,7 +79,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 			connection.cipherId = UInt16.stream(requestedEncryptionCapabilities.ciphers()).anyMatch(c -> c == EncryptionCapabilities.AES_256_GCM)
 					? EncryptionCapabilities.AES_256_GCM
 					: EncryptionCapabilities.NO_COMMON_CIPHER;
-			// TODO: also set connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION
+			connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION;
 		}
 
 		// SMB2_COMPRESSION_CAPABILITIES TODO
@@ -159,10 +159,10 @@ public record Negotiator(TcpServer server, Connection connection) {
 
 	public SMB2Message sessionSetup(SessionSetupRequest request) {
 		if (connection.negotiateDialect != Dialects.SMB3_1_1) {
-			// TODO fail with STATUS_ACCESS_DENIED as per spec
+			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
-		if ((connection.clientCapabilities & GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION) == 0) {
-			// TODO disconnect without replying as per spec
+		if ((connection.clientCapabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0) {
+			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
 		final Session session;
 		if (request.header().sessionId() == 0L) {
@@ -180,8 +180,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 			// If SessionId is not found in Connection.SessionTable, the server MUST fail the request with STATUS_USER_SESSION_DELETED.
 			session = connection.sessionTable.get(request.header().sessionId());
 			if (session == null) {
-				// TODO fail with STATUS_USER_SESSION_DELETED
-				throw new UnsupportedOperationException("no idea which session to continue with. according to spec we should fail with STATUS_INVALID_PARAMETER");
+				return ErrorResponse.create(request, NTStatus.STATUS_USER_SESSION_DELETED);
 			}
 		}
 		assert session != null;
@@ -224,8 +223,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 			throw new UnsupportedOperationException("Not yet implemented", e);
 		} catch (NTStatusException e) {
 			// TODO log?
-			header.status(e.status);
-			return new SessionSetupResponse(header.build());
+			return ErrorResponse.create(request, e.status);
 		}
 	}
 
