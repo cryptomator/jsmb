@@ -25,6 +25,7 @@ import java.security.NoSuchAlgorithmException;
 /**
  * Signs an SMB2 message.
  *
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d594481c-f6d5-4de5-8842-9099063d41e7">Signing the Message</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/a3e9ea1e-53c8-4cff-94bd-d98fb20417c0">Signing An Outgoing Message</a>
  */
 public class MessageSigner {
