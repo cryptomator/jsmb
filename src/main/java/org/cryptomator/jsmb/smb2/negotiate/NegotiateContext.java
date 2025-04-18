@@ -5,7 +5,10 @@ import org.cryptomator.jsmb.util.MemorySegments;
 
 import java.lang.foreign.MemorySegment;
 
-public sealed interface NegotiateContext permits PreauthIntegrityCapabilities, EncryptionCapabilities, CompressionCapabilities, NetnameNegotiateContextId, TransportCapabilities, RDMATransformCapabilities, SigningCapabilities {
+/**
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/15332256-522e-4a53-8cd7-0bd17678a2f7">SMB2 NEGOTIATE_CONTEXT Request Values</a>
+ */
+public sealed interface NegotiateContext permits PreauthIntegrityCapabilities, EncryptionCapabilities, CompressionCapabilities, NetnameNegotiateContextId, TransportCapabilities, RDMATransformCapabilities, SigningCapabilities, ReservedCapabilities {
 
 	char PREAUTH_INTEGRITY_CAPABILITIES = 0x01;
 	char ENCRYPTION_CAPABILITIES = 0x02;
@@ -28,7 +31,8 @@ public sealed interface NegotiateContext permits PreauthIntegrityCapabilities, E
 			case TRANSPORT_CAPABILITIES -> new TransportCapabilities(data);
 			case RDMA_TRANSFORM_CAPABILITIES -> new RDMATransformCapabilities(data);
 			case SIGNING_CAPABILITIES -> new SigningCapabilities(data);
-			default -> throw new IllegalArgumentException("Unknown negotiate context type: " + contextType);
+			case CONTEXTTYPE_RESERVED -> new ReservedCapabilities(data);
+			default -> throw new IllegalArgumentException("Unknown negotiate context type: 0x" + Integer.toHexString(contextType));
 		};
 	}
 
