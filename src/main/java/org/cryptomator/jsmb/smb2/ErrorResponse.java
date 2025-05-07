@@ -30,6 +30,7 @@ public record ErrorResponse(PacketHeader header, MemorySegment segment) implemen
 	static ErrorResponse create(SMB2Message request, int errorCode) {
 		PacketHeader header = PacketHeader.builder() //
 				.command(request.header().command()) //
+				.messageId(request.header().messageId()) //
 				.sessionId(request.header().sessionId()) //
 				.treeId(request.header().treeId()) //
 				.status(errorCode) //

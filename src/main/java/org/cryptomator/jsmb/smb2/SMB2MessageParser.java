@@ -4,6 +4,7 @@ import org.cryptomator.jsmb.common.MalformedMessageException;
 import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
+import java.util.HexFormat;
 
 public class SMB2MessageParser {
 
@@ -26,7 +27,7 @@ public class SMB2MessageParser {
 		return switch (Command.valueOf(header.command())) {
 			case NEGOATIATE -> new NegotiateRequest(header, bodySegment);
 			case SESSION_SETUP -> new SessionSetupRequest(header, bodySegment);
-			default -> throw new MalformedMessageException("Unknown command: " + header.command());
+			default -> throw new MalformedMessageException("Unknown command: " + Integer.toHexString(header.command()));
 		};
 	}
 }

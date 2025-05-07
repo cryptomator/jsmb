@@ -48,6 +48,10 @@ public class TcpServer implements AutoCloseable {
 				executor.execute(new TcpConnection(this, clientSocket));
 			}
 		} catch (IOException e) {
+			if (Thread.interrupted()) {
+				LOG.debug("Listener interrupted, shutting down");
+				return;
+			}
 			throw new UncheckedIOException(e);
 		} finally {
 			executor.shutdown();
