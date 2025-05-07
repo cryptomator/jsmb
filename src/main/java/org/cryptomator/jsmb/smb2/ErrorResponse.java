@@ -20,11 +20,11 @@ public record ErrorResponse(PacketHeader header, MemorySegment segment) implemen
 	}
 
 	public void errorContextCount(byte errorContextCount) {
-		segment.set(Layouts.BYTE, 16, errorContextCount);
+		segment.set(Layouts.BYTE, 2, errorContextCount);
 	}
 
 	public void byteCount(int byteCount) {
-		segment.set(Layouts.LE_INT32, 32, byteCount);
+		segment.set(Layouts.LE_INT32, 4, byteCount);
 	}
 
 	static ErrorResponse create(SMB2Message request, int errorCode) {
