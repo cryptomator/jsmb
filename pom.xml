@@ -85,6 +85,12 @@
 			<version>${slf4j.version}</version>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>com.hierynomus</groupId>
+			<artifactId>smbj</artifactId>
+			<version>0.14.0</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
