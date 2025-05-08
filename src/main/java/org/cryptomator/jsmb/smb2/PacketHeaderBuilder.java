@@ -71,7 +71,7 @@ public record PacketHeaderBuilder(MemorySegment segment) {
 	}
 
 	public PacketHeaderBuilder signature(byte[] signature) {
-		segment.asSlice(44, 16).copyFrom(MemorySegment.ofArray(signature));
+		segment.asSlice(48, 16).copyFrom(MemorySegment.ofArray(signature));
 		return this;
 	}
 

@@ -55,8 +55,8 @@ public class MessageSigner {
 			ByteBuffer.wrap(nonce) //
 					.putLong(0, message.header().messageId()) //
 					.putInt(8, flags);
-			byte[] data = Bytes.concat(newHeader.segment().toArray(Layouts.BYTE), message.segment().toArray(Layouts.BYTE), new byte[20]); // FIXME
-			byte[] signature = gmac(data, nonce, session.signingKey);
+			byte[] data = Bytes.concat(newHeader.segment().toArray(Layouts.BYTE), message.segment().toArray(Layouts.BYTE)); // FIXME??
+			byte[] signature = gmac(data, nonce, session.signingKey); // TODO: which key to use?
 			return newHeader.signature(signature).build();
 		} else {
 			throw new UnsupportedOperationException("Only GMAC implemented");
