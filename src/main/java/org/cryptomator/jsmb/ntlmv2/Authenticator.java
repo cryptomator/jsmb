@@ -7,6 +7,8 @@ import org.cryptomator.jsmb.util.Layouts;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
+import static org.cryptomator.jsmb.ntlmv2.NegotiateFlags.isSet;
+
 /**
  * Performs the NTLM v2 Authentication
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/5e550938-91d4-459f-b67d-75d70009e3f3">NTLM v2 Authentication</a>
@@ -24,7 +26,14 @@ class Authenticator {
 		byte[] responseKeyLM = LMOWFv2(passwd, user, userDom);
 
 		var ntlmV2Response = authenticateMessage.ntlmV2Response();
-		byte[] challengeFromClient = ntlmV2Response.challengeFromClient();
+		byte[] challengeFromClient;
+		if(authenticateMessage.ntChallengeResponseLen() > 0x0018) {
+			challengeFromClient = ntlmV2Response.challengeFromClient();
+		} else if(isSet(challengeMessage.negotiateFlags(), NegotiateFlags.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY)) {
+			throw new UnsupportedOperationException("Not yet implemented");
+		} else {
+			throw new UnsupportedOperationException("Not yet implemented");
+		}
 		var serverChallenge = challengeMessage.serverChallenge();
 		var time = ntlmV2Response.timestamp();
 		var expectedResponse = computeResponse(responseKeyNT, responseKeyLM, serverChallenge, challengeFromClient, time, ntlmV2Response.avPairsSegment().toArray(Layouts.BYTE));
