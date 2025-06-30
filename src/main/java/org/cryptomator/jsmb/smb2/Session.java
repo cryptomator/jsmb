@@ -1,6 +1,8 @@
 package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.ntlmv2.NtlmSession;
+import org.cryptomator.jsmb.srvs.SrvsGlobal;
+import org.cryptomator.jsmb.srvs.SrvsSession;
 import org.jetbrains.annotations.Range;
 
 import java.time.Instant;
@@ -10,6 +12,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * An SMB2 session.
+ *
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/fbcbc952-8c1f-4528-a0ab-7aed7d52264e">Per Session</a>
+ */
 public class Session {
 
 	private static final AtomicLong SESSION_ID_GENERATOR = new AtomicLong(1);
@@ -21,7 +28,6 @@ public class Session {
 	}
 
 	public final long sessionId;
-	public final long sessionGlobalId;
 	public final Connection connection;
 	public NtlmSession ntlmSession;
 
@@ -32,10 +38,10 @@ public class Session {
 		}
 		this.connection = connection;
 		this.sessionId = sessionId;
-		this.sessionGlobalId = sessionId;
 		this.ntlmSession = NtlmSession.create();
 	}
 
+	public int sessionGlobalId;
 	public State state;
 	public Object securityContext = null; // TODO adjust type
 	public byte[] sessionKey = null;
@@ -59,9 +65,19 @@ public class Session {
 	 */
 	public static Session create(Connection connection) {
 		var session = new Session(connection, SESSION_ID_GENERATOR.incrementAndGet());
-		connection.global.sessionTable.put(session.sessionGlobalId, session);
+		connection.global.sessionTable.put(session.sessionId, session);
 		connection.sessionTable.put(session.sessionId, session);
+		session.sessionGlobalId = register();
 		return session;
 	}
 
+	/**
+	 * @return the globalSessionId
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-srvs/cb311421-de4d-4cd7-bb05-ce52e03814e4">Server Registers a New Session</a>
+	 */
+	private static int register() {
+		var globalSessionId = SrvsSession.SRVS_SESSION_ID_GENERATOR.getAndIncrement();
+		SrvsGlobal.INSTANCE.sessionList.put(globalSessionId, new SrvsSession(globalSessionId));
+		return globalSessionId;
+	}
 }
