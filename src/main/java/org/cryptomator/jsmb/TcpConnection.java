@@ -23,12 +23,14 @@ class TcpConnection implements Runnable {
 	private final Socket socket;
 	private final Connection connection;
 	private final Negotiator negotiator;
+	private final Runtime runtime;
 
 	public TcpConnection(TcpServer server, Socket socket) {
 		this.server = server;
 		this.socket = socket;
 		this.connection = new Connection(server.global);
 		this.negotiator = new Negotiator(server, connection);
+		this.runtime = new Runtime(connection);
 	}
 
 	@Override
@@ -85,6 +87,7 @@ class TcpConnection implements Runnable {
 			var response = switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
+				case LogoffRequest request -> runtime.logoff(request);
 				default -> throw new MalformedMessageException("Command not implemented: " + msg.header().command());
 			};
 			writeResponse(response);
