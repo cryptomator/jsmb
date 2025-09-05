@@ -235,9 +235,17 @@ public record Negotiator(TcpServer server, Connection connection) {
 					header.status(NTStatus.STATUS_MORE_PROCESSING_REQUIRED);
 					var response = new SessionSetupResponse(header.build());
 					session.ntlmSession = awaitingAuthentication;
-					return response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
+
+					var fullResponse = response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
+					var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
+					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
+					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, fullResponse.serialize()));
+					return fullResponse;
 				}
 				case NtlmSession.AwaitingAuthentication s -> {
+					var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
+					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
+
 					var authenticated = s.authenticate(gssToken.token(), "user", "password", "DOMAIN"); // FIXME hardcoded credentials
 					header.status(NTStatus.STATUS_SUCCESS);
 					header.creditResponse((char) 8192);
