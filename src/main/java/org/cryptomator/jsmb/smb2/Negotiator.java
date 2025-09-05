@@ -82,8 +82,10 @@ public record Negotiator(TcpServer server, Connection connection) {
 		if (requestedEncryptionCapabilities != null) {
 			connection.cipherId = UInt16.stream(requestedEncryptionCapabilities.ciphers()).anyMatch(c -> c == EncryptionCapabilities.AES_256_GCM)
 					? EncryptionCapabilities.AES_256_GCM
-					: EncryptionCapabilities.NO_COMMON_CIPHER;
-			connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION;
+					: EncryptionCapabilities.NO_COMMON_CIPHER; //NOTE: No common cipher
+			if(connection.cipherId != 0) {
+				connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION;
+			}
 		}
 
 		// SMB2_COMPRESSION_CAPABILITIES TODO
