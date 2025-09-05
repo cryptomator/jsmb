@@ -4,6 +4,7 @@ import org.cryptomator.jsmb.common.SMBMessage;
 import org.cryptomator.jsmb.smb2.crypto.MessageSigner;
 import org.cryptomator.jsmb.util.Bytes;
 import org.cryptomator.jsmb.util.Layouts;
+import org.jetbrains.annotations.Range;
 
 import java.lang.foreign.MemorySegment;
 
@@ -24,6 +25,15 @@ public interface SMB2Message extends SMBMessage {
 		int PRIORITY_MASK = 0x00000070;
 		int DFS_OPERATIONS = 0x10000000;
 		int REPLAY_OPERATION = 0x20000000;
+
+		@Range(from = 0, to = 7)
+		static int priorityFrom(int flags) {
+			return (flags & PRIORITY_MASK) >>> 4;
+		}
+
+		static int withPriority(int flags, @Range(from = 0, to = 7) int priority) {
+			return (flags & ~PRIORITY_MASK) | (priority << 4);
+		}
 	}
 
 	PacketHeader header();
