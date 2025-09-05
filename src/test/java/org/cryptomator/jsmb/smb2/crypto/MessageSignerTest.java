@@ -1,8 +1,19 @@
 package org.cryptomator.jsmb.smb2.crypto;
 
+import org.cryptomator.jsmb.common.NTStatus;
+import org.cryptomator.jsmb.smb2.Command;
+import org.cryptomator.jsmb.smb2.PacketHeader;
+import org.cryptomator.jsmb.smb2.PacketHeaderBuilder;
+import org.cryptomator.jsmb.smb2.SMB2Message;
+import org.cryptomator.jsmb.smb2.SessionSetupResponse;
+import org.cryptomator.jsmb.smb2.negotiate.SigningCapabilities;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -59,5 +70,55 @@ class MessageSignerTest {
 		var signature = signer.cmac(data, HEX_FORMAT.parseHex("2b7e151628aed2a6abf7158809cf4f3c"));
 
 		Assertions.assertEquals("070a16b46b4d4144f79bdd9dd04a287c", HEX_FORMAT.formatHex(signature));
+	}
+
+	@ParameterizedTest
+	@CsvSource(textBlock = """
+			0x00000000ef9270f6,\
+			fe534d42400001000000000001000020110000000000000002000000000000000000000000000000f67092ef0000000000000000000000000000000000000000,\
+			a11b3019a0030a0100a3120410010000003336c415d6ca63b600000000,\
+			fe534d42400001000000000001000020110000000000000002000000000000000000000000000000f67092ef00000000000000000000000000000000000000000900000048001d00a11b3019a0030a0100a3120410010000003336c415d6ca63b600000000,\
+			23A69FFF57BCB19502BB74E79CE760DB,\
+			AES_CMAC,\
+			fe534d42400001000000000001000020190000000000000002000000000000000000000000000000f67092ef000000000df13f46f7f59874e581dbbe82736c040900000048001d00a11b3019a0030a0100a3120410010000003336c415d6ca63b600000000\
+			
+			0x00000000dfc1a81a,\
+			fe534d424000010000000000010000201100000000000000020000000000000000000000000000001aa8c1df0000000000000000000000000000000000000000,\
+			a11b3019a0030a0100a3120410010000009ddb82364613ea5600000000,\
+			fe534d424000010000000000010000201100000000000000020000000000000000000000000000001aa8c1df00000000000000000000000000000000000000000900000048001d00a11b3019a0030a0100a3120410010000009ddb82364613ea5600000000,\
+			E07AA62CC914810061E07EE1084FCE1B,\
+			AES_GMAC,\
+			fe534d424000010000000000010000201900000000000000020000000000000000000000000000001aa8c1df000000003484d3eef43af37ac480d6a4e2ee71400900000048001d00a11b3019a0030a0100a3120410010000009ddb82364613ea5600000000\
+			""" //
+	)
+	public void testSigning(long sessionId, String expUnsignedHdrHex, String securityBufferHex, String expUnsignedMsgHex, String signingKeyHex, SigningCapabilities.Algorithm signingAlg, String expSignedMsgHex) {
+		var unsignedHdr = new PacketHeaderBuilder() //
+				.creditCharge((char) 1) //
+				.status(NTStatus.STATUS_SUCCESS) //
+				.command(Command.SESSION_SETUP.value()) //
+				.creditResponse((char) 8192) //
+				.flags(SMB2Message.Flags.withPriority(SMB2Message.Flags.SERVER_TO_REDIR, 1)) //
+				.messageId(2) //
+				.sessionId(sessionId) //
+				.build();
+		var expUnsignedHdr = HEX_FORMAT.parseHex(expUnsignedHdrHex);
+		assertBytesEquals(expUnsignedHdr, unsignedHdr.segment().toArray(ValueLayout.OfByte.JAVA_BYTE));
+
+		var unsignedMsg = new SessionSetupResponse(unsignedHdr).withSecurityBuffer(HEX_FORMAT.parseHex(securityBufferHex));
+		var expUnsignedMsg = HEX_FORMAT.parseHex(expUnsignedMsgHex);
+		assertBytesEquals(expUnsignedMsg, unsignedMsg.serialize());
+
+		var signer = new MessageSigner();
+		var signedMsg = new SignedMessage(signer.sign(unsignedMsg, HEX_FORMAT.parseHex(signingKeyHex), signingAlg), unsignedMsg.segment());
+		var expSignedMsg = HEX_FORMAT.parseHex(expSignedMsgHex);
+		assertBytesEquals(signedMsg.serialize(), expSignedMsg);
+	}
+
+	record SignedMessage(PacketHeader header, MemorySegment segment) implements SMB2Message {
+
+	}
+
+	private void assertBytesEquals(byte[] expected, byte[] actual) {
+		Assertions.assertEquals(HEX_FORMAT.formatHex(expected), HEX_FORMAT.formatHex(actual));
 	}
 }
