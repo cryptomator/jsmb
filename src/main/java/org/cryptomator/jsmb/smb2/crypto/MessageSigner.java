@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2.crypto;
 
 import org.cryptomator.jsmb.ntlmv2.NtlmSession;
 import org.cryptomator.jsmb.smb2.Command;
+import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.PacketHeader;
 import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.smb2.Session;
@@ -22,6 +23,7 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
+import java.util.Objects;
 
 /**
  * Signs an SMB2 message.
@@ -34,17 +36,14 @@ public class MessageSigner {
 	private static final int NONCE_FLAG_IS_SERVER = 0b1;
 	private static final int NONCE_FLAG_IS_CANCEL = 0b10;
 
-	private final Session session;
-
-	public MessageSigner(Session session) {
-		this.session = session;
+	public PacketHeader sign(SMB2Message message, byte[] signingKey, Connection connection) {
+		assert Objects.equals(connection.dialect, "3.1.1");
+		return sign(message, signingKey, connection.signingAlgorithmId);
 	}
 
-
-	public PacketHeader sign(SMB2Message message, byte[] key) {
-		return sign(message, key, session.connection.signingAlgorithmId);
-	}
-
+	/**
+	 * @implNote Requires dialect 3.1.1
+	 */
 	@VisibleForTesting
 	PacketHeader sign(SMB2Message message, byte[] signingKey, SigningCapabilities.SigningAlgorithm signingAlgorithm) {
 		if (signingKey == null) {
@@ -71,7 +70,7 @@ public class MessageSigner {
 			byte[] signature = gmac(data, nonce, signingKey);
 			return newHeader.signature(signature).build();
 		} else {
-			throw new UnsupportedOperationException("Unsupported algorithm: " + session.connection.signingAlgorithmId);
+			throw new UnsupportedOperationException("Unsupported algorithm: " + signingAlgorithm);
 		}
 	}
 

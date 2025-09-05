@@ -115,9 +115,11 @@ class TcpConnection implements Runnable {
 		var sessionId = response.header().sessionId(); //TODO? Should be request here?
 		var session = connection.sessionTable.get(sessionId);
 		assert (sessionId == 0) == (session == null);
-
-		boolean shouldSign = shouldSign(request, response, session);
-		return shouldSign ? response.sign(new MessageSigner(session), selectKey(response, session)) : response;
+		if (shouldSign(request, response, session)) {
+			assert Objects.equals(connection.dialect, "3.1.1");
+			return response.sign(new MessageSigner(), selectKey(response, session), connection);
+		}
+		return response;
 	}
 
 	/**

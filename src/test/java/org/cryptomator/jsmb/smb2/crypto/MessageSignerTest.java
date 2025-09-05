@@ -21,7 +21,7 @@ class MessageSignerTest {
 				.putLong(0, 2L) //
 				.putInt(8, 1);
 		var session = Mockito.mock(Session.class);
-		var signer = new MessageSigner(session);
+		var signer = new MessageSigner();
 
 		var signature = signer.gmac(data, nonce, Base64.getDecoder().decode("9fORJ+Vx1QUv43YChZvR6A=="));
 
@@ -41,7 +41,7 @@ class MessageSignerTest {
 		var data = Base64.getDecoder().decode("uaY8hb18uTydJUNXIJmsCgsatN3b6kx1us+rl1WudjyxBipZTdqcqGATTHR3Z1KtNXz9oy0cIOiWNw2sWAjBRwYe0VRaKm/yb+Lg4uOOyIfB4hDOytSoyaht");
 		var nonce = Base64.getDecoder().decode("RDlcpJQ6yiSHWiga");
 		var session = Mockito.mock(Session.class);
-		var signer = new MessageSigner(session);
+		var signer = new MessageSigner();
 
 		var signature = signer.gmac(data, nonce, Base64.getDecoder().decode("pIURFzKKk79Sg4LyLzWslGiCWf0vUX5P0n7pz5uMiiw="));
 
@@ -59,7 +59,7 @@ class MessageSignerTest {
 		 */
 		var data = HEX_FORMAT.parseHex("6bc1bee22e409f96e93d7e117393172a");
 		var session = Mockito.mock(Session.class);
-		var signer = new MessageSigner(session);
+		var signer = new MessageSigner();
 
 		var signature = signer.cmac(data, HEX_FORMAT.parseHex("2b7e151628aed2a6abf7158809cf4f3c"));
 

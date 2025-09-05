@@ -256,7 +256,8 @@ public record Negotiator(TcpServer server, Connection connection) {
 					session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
 					session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
 					var response = new SessionSetupResponse(header.build()).withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
-					return response.sign(new MessageSigner(session), session.signingKey);
+					assert Objects.equals(connection.dialect, "3.1.1");
+					return response.sign(new MessageSigner(), session.signingKey, connection);
 				}
 				case NtlmSession.Authenticated _ -> throw new IllegalStateException("Session already authenticated");
 			}

@@ -7,6 +7,7 @@ import org.cryptomator.jsmb.util.Layouts;
 import org.jetbrains.annotations.Range;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Objects;
 
 /**
  * A SMB 2 Message
@@ -44,9 +45,10 @@ public interface SMB2Message extends SMBMessage {
 		return Bytes.concat(header().segment().toArray(Layouts.BYTE), segment().toArray(Layouts.BYTE));
 	}
 
-	default SMB2Message sign(MessageSigner signer, byte[] key) {
+	default SMB2Message sign(MessageSigner signer, byte[] key, Connection connection) {
+		assert Objects.equals(connection.dialect, "3.1.1");
 		record SignedMessage(PacketHeader header, MemorySegment segment) implements SMB2Message {}
-		return new SignedMessage(signer.sign(this, key), segment());
+		return new SignedMessage(signer.sign(this, key, connection), segment());
 	}
 
 }
