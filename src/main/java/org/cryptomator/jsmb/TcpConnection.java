@@ -117,7 +117,7 @@ class TcpConnection implements Runnable {
 		assert (sessionId == 0) == (session == null);
 		if (shouldSign(request, response, session)) {
 			assert Objects.equals(connection.dialect, "3.1.1");
-			return response.sign(new MessageSigner(), selectKey(response, session), connection);
+			return response.sign(selectKey(response, session), connection);
 		}
 		return response;
 	}
