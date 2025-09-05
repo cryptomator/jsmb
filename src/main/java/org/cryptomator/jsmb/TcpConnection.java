@@ -7,8 +7,10 @@ import org.cryptomator.jsmb.smb1.SMB1MessageParser;
 import org.cryptomator.jsmb.smb1.SMB1Negotiator;
 import org.cryptomator.jsmb.smb1.SmbComNegotiateRequest;
 import org.cryptomator.jsmb.smb2.Connection;
+import org.cryptomator.jsmb.smb2.LogoffRequest;
 import org.cryptomator.jsmb.smb2.NegotiateRequest;
 import org.cryptomator.jsmb.smb2.Negotiator;
+import org.cryptomator.jsmb.smb2.Runtime;
 import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.smb2.SMB2MessageParser;
 import org.cryptomator.jsmb.smb2.Session;
@@ -36,12 +38,14 @@ class TcpConnection implements Runnable {
 	private final Socket socket;
 	private final Connection connection;
 	private final Negotiator negotiator;
+	private final Runtime runtime;
 
 	public TcpConnection(TcpServer server, Socket socket) {
 		this.server = server;
 		this.socket = socket;
 		this.connection = new Connection(server.global);
 		this.negotiator = new Negotiator(server, connection);
+		this.runtime = new Runtime(connection);
 	}
 
 	@Override
@@ -98,6 +102,7 @@ class TcpConnection implements Runnable {
 			var response = switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
+				case LogoffRequest request -> runtime.logoff(request);
 				default -> throw new MalformedMessageException("Command not implemented: " + msg.header().command());
 			};
 			writeResponse(sign(msg, response));
