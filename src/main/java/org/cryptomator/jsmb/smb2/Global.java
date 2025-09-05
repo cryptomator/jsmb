@@ -16,4 +16,7 @@ public class Global {
 	public final boolean requireMessageSigning = true;
 
 	public final boolean isMultiChannelCapable = false;
+
+	public final boolean isEncryptionSupported = false; //TODO
+	public final boolean isSigningCapabilitiesSupported = true; //TODO
 }
