@@ -41,13 +41,7 @@ public class MessageSigner {
 	}
 
 
-	public PacketHeader sign(SMB2Message message, boolean useSigningKey) {
-		byte[] key;
-		if (useSigningKey) {
-			key = session.signingKey;
-		} else {
-			throw new AssertionError();
-		}
+	public PacketHeader sign(SMB2Message message, byte[] key) {
 		return sign(message, key, session.connection.signingAlgorithmId);
 	}
 

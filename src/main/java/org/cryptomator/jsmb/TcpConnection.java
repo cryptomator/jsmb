@@ -90,7 +90,7 @@ class TcpConnection implements Runnable {
 				case LogoffRequest request -> runtime.logoff(request);
 				default -> throw new MalformedMessageException("Command not implemented: " + msg.header().command());
 			};
-			writeResponse(response);
+			writeResponse(sign(msg, response));
 			nextCommand = msg.header().nextCommand();
 		} while (nextCommand != 0);
 	}
@@ -108,5 +108,49 @@ class TcpConnection implements Runnable {
 		} catch (IOException e) {
 			LOG.error("Exception while writing response", e);
 		}
+	}
+
+	//TODO move?
+	private SMBMessage sign(SMB2Message request, SMB2Message response) {
+		var sessionId = response.header().sessionId(); //TODO? Should be request here?
+		var session = connection.sessionTable.get(sessionId);
+		assert (sessionId == 0) == (session == null);
+
+		boolean shouldSign = shouldSign(request, response, session);
+		return shouldSign ? response.sign(new MessageSigner(session), selectKey(response, session)) : response;
+	}
+
+	/**
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d594481c-f6d5-4de5-8842-9099063d41e7">Signing the Message</a>
+	 */
+	private boolean shouldSign(SMB2Message request, SMB2Message response, @Nullable Session session) {
+		var signed = !Arrays.equals(request.header().signature(), new byte[16]);
+		var sessionId = response.header().sessionId();
+		var treeId = response.header().treeId(); //TODO: Verify actually treeId from RESPONSE
+
+		assert signed == request.header().hasFlag(SMB2Message.Flags.SIGNED);
+		assert (sessionId == 0) == (session == null);
+		if(signed && sessionId != 0 && treeId == 0 && session.signingRequired) {
+			return true;
+		}
+		if(signed && sessionId != 0 && treeId != 0 && session.signingRequired && (!connection.global.encryptData || ((connection.clientCapabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0))) {
+			return true;
+		}
+		if(signed) { //TODO: "Not interim"
+			return true;
+		}
+		return false;
+	}
+
+	private byte[] selectKey(SMB2Message response, Session session) { //TODO Wrap keys in class?
+		assert Objects.equals(connection.dialect, "3.1.1");
+		if(response instanceof SessionSetupResponse && response.header().status() != NTStatus.STATUS_SUCCESS) {
+			return session.signingKey;
+		}
+		//TODO: For all other responses being signed the server MUST provide Channel.SigningKey by looking up the Channel in Session.ChannelList,
+		// where the connection matches the Channel.Connection.
+
+		return session.signingKey; //According to smbj this is a fine substitue for using channel.signingKey
+		//return session.sessionKey; //According to smbj this is only used for non 3.x messages
 	}
 }

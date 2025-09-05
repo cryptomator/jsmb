@@ -34,9 +34,9 @@ public interface SMB2Message extends SMBMessage {
 		return Bytes.concat(header().segment().toArray(Layouts.BYTE), segment().toArray(Layouts.BYTE));
 	}
 
-	default SMB2Message sign(MessageSigner signer, boolean useSigningKey) {
+	default SMB2Message sign(MessageSigner signer, byte[] key) {
 		record SignedMessage(PacketHeader header, MemorySegment segment) implements SMB2Message {}
-		return new SignedMessage(signer.sign(this, useSigningKey), segment());
+		return new SignedMessage(signer.sign(this, key), segment());
 	}
 
 }
