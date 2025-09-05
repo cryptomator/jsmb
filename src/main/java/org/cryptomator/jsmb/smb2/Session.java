@@ -34,6 +34,12 @@ public class Session {
 		this.connection = connection;
 		this.sessionId = sessionId;
 		this.ntlmSession = NtlmSession.create();
+
+		this.encryptData = connection.global.encryptData;
+		this.channelList = new ArrayList<>();
+
+		this.preauthIntegrityHashValue = connection.preauthIntegrityHashValue;
+		this.fullSessionKey = null;
 	}
 
 	public int sessionGlobalId;
@@ -46,10 +52,13 @@ public class Session {
 	public boolean isAnonymous = false;
 	public Instant creationTime = Instant.now();
 	public Instant idleTime = Instant.now();
-	public boolean encryptData = true;
-	public List<?> channelList = new ArrayList<>();
+
+	public boolean encryptData;
+	public List<?> channelList;
+
 	public byte[] preauthIntegrityHashValue;
-	public byte[] fullSessionKey = null;
+	public byte[] fullSessionKey;
+
 	public byte[] signingKey = null;
 	public byte[] applicationKey = null;
 
