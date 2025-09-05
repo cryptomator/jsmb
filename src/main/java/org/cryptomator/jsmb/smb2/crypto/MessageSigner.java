@@ -43,14 +43,14 @@ public class MessageSigner {
 	 * @implNote Requires dialect 3.1.1
 	 */
 	@VisibleForTesting
-	PacketHeader sign(SMB2Message message, byte[] signingKey, char signingAlgorithmId) {
+	PacketHeader sign(SMB2Message message, byte[] signingKey, SigningCapabilities.Algorithm signingAlgorithm) {
 		if (signingKey == null) {
 			throw new IllegalStateException("Signing key not set");
 		}
 		var newHeader = message.header().copy().signature(new byte[16]); // zero out any existing signature
 		newHeader.flags(message.header().flags() | SMB2Message.Flags.SIGNED);
 
-		if (signingAlgorithmId == SigningCapabilities.AES_GMAC) {
+		if (signingAlgorithm == SigningCapabilities.Algorithm.AES_GMAC) {
 			byte[] nonce = new byte[12];
 			int flags = NONCE_FLAG_IS_SERVER;
 			if (message.header().command() == Command.CANCEL.value()) {
@@ -64,7 +64,7 @@ public class MessageSigner {
 			byte[] signature = gmac(data, nonce, signingKey);
 			return newHeader.signature(signature).build();
 		} else {
-			throw new UnsupportedOperationException("Only GMAC implemented");
+			throw new UnsupportedOperationException("Unsupported algorithm: " + signingAlgorithm);
 		}
 	}
 
