@@ -59,7 +59,11 @@ public class MessageSigner {
 		var newHeader = message.header().copy().signature(new byte[16]); // zero out any existing signature
 		newHeader.flags(message.header().flags() | SMB2Message.Flags.SIGNED);
 
-		if (signingAlgorithm == SigningCapabilities.SigningAlgorithm.AES_GMAC) {
+		if (signingAlgorithm == null || signingAlgorithm == SigningCapabilities.SigningAlgorithm.AES_CMAC) {
+			byte[] data = Bytes.concat(newHeader.segment().toArray(Layouts.BYTE), message.segment().toArray(Layouts.BYTE));
+			byte[] signature = cmac(data, signingKey);
+			return newHeader.signature(signature).build();
+		} else if (signingAlgorithm == SigningCapabilities.SigningAlgorithm.AES_GMAC) {
 			byte[] nonce = new byte[12];
 			int flags = NONCE_FLAG_IS_SERVER;
 			if (message.header().command() == Command.CANCEL.value()) {
@@ -91,6 +95,21 @@ public class MessageSigner {
 		} catch (IllegalBlockSizeException | BadPaddingException e) {
 			throw new AssertionError("Block size or padding irrelevant when encrypting with GCM", e);
 		} catch (InvalidAlgorithmParameterException | InvalidKeyException e) {
+			throw new IllegalArgumentException("Invalid key or algorithm parameter", e);
+		}
+	}
+
+	@VisibleForTesting
+	byte[] cmac(byte[] data, byte[] signingKeyBytes) {
+		try {
+			Mac mac = Mac.getInstance("AESCMAC", new BouncyCastleProvider());
+			mac.init(new SecretKeySpec(signingKeyBytes, "AES128"));
+			return mac.doFinal(data);
+
+			//TODO \|/
+		} catch (NoSuchAlgorithmException e) {
+			throw new AssertionError("Every implementation of the Java platform is required to support AES/GCM/NoPadding", e);
+		} catch (InvalidKeyException e) {
 			throw new IllegalArgumentException("Invalid key or algorithm parameter", e);
 		}
 	}

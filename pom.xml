@@ -97,6 +97,12 @@
 			<version>0.14.0</version>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>1.80</version>
+			<scope>compile</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
