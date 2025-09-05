@@ -97,9 +97,9 @@ public record Negotiator(TcpServer server, Connection connection) {
 		// SMB2_SIGNING_CAPABILITIES
 		var requestedSigningCapabilities = request.negotiateContext(SigningCapabilities.class);
 		if (request.negotiateContext(SigningCapabilities.class) != null) {
-			connection.signingAlgorithmId = UInt16.stream(requestedSigningCapabilities.signingAlgorithms()).anyMatch(c -> c == SigningCapabilities.AES_GMAC)
-					? SigningCapabilities.AES_GMAC
-					: SigningCapabilities.AES_CMAC;
+			connection.signingAlgorithmId = UInt16.stream(requestedSigningCapabilities.signingAlgorithms()).anyMatch(c -> c == SigningCapabilities.SigningAlgorithm.AES_GMAC.getValue())
+					? SigningCapabilities.SigningAlgorithm.AES_GMAC
+					: SigningCapabilities.SigningAlgorithm.AES_CMAC;
 		}
 
 		// SMB2_TRANSPORT_CAPABILITIES TODO
@@ -144,7 +144,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		}
 		// SMB2_SIGNING_CAPABILITIES
 		if (request.negotiateContext(SigningCapabilities.class) != null) {
-			contexts.add(SigningCapabilities.build(connection.signingAlgorithmId));
+			contexts.add(SigningCapabilities.build(connection.signingAlgorithmId.getValue()));
 		}
 		// SMB2_TRANSPORT_CAPABILITIES
 		if (request.negotiateContext(TransportCapabilities.class) != null) {
