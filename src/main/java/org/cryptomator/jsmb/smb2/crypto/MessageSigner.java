@@ -17,6 +17,7 @@ import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
@@ -39,24 +40,37 @@ public class MessageSigner {
 		this.session = session;
 	}
 
-	public PacketHeader sign(SMB2Message message) {
-		if (session.signingKey == null) {
+
+	public PacketHeader sign(SMB2Message message, boolean useSigningKey) {
+		byte[] key;
+		if (useSigningKey) {
+			key = session.signingKey;
+		} else {
+			throw new AssertionError();
+		}
+		return sign(message, key, session.connection.signingAlgorithmId);
+	}
+
+	@VisibleForTesting
+	PacketHeader sign(SMB2Message message, byte[] signingKey, char signingAlgorithmId) {
+		if (signingKey == null) {
 			throw new IllegalStateException("Signing key not set");
 		}
 		var newHeader = message.header().copy().signature(new byte[16]); // zero out any existing signature
-		//newHeader.flags(message.header().flags() | SMB2Message.Flags.SIGNED);
+		newHeader.flags(message.header().flags() | SMB2Message.Flags.SIGNED);
 
-		if (session.connection.signingAlgorithmId == SigningCapabilities.AES_GMAC) {
+		if (signingAlgorithmId == SigningCapabilities.AES_GMAC) {
 			byte[] nonce = new byte[12];
 			int flags = NONCE_FLAG_IS_SERVER;
 			if (message.header().command() == Command.CANCEL.value()) {
 				flags |= NONCE_FLAG_IS_CANCEL;
 			}
 			ByteBuffer.wrap(nonce) //
+					.order(ByteOrder.LITTLE_ENDIAN) //
 					.putLong(0, message.header().messageId()) //
 					.putInt(8, flags);
-			byte[] data = Bytes.concat(newHeader.segment().toArray(Layouts.BYTE), message.segment().toArray(Layouts.BYTE)); // FIXME??
-			byte[] signature = gmac(data, nonce, session.signingKey); // TODO: which key to use?
+			byte[] data = Bytes.concat(newHeader.segment().toArray(Layouts.BYTE), message.segment().toArray(Layouts.BYTE));
+			byte[] signature = gmac(data, nonce, signingKey);
 			return newHeader.signature(signature).build();
 		} else {
 			throw new UnsupportedOperationException("Only GMAC implemented");
@@ -80,5 +94,4 @@ public class MessageSigner {
 			throw new IllegalArgumentException("Invalid key or algorithm parameter", e);
 		}
 	}
-
 }
