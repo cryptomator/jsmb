@@ -245,8 +245,8 @@ public record Negotiator(TcpServer server, Connection connection) {
 					session.ntlmSession = authenticated;
 					session.sessionKey = authenticated.exportedSessionKey(); // step 6
 					session.fullSessionKey = session.sessionKey;
-					session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
-					session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
+					session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
+					session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
 					var response = new SessionSetupResponse(header.build()).withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
 					return response.sign(new MessageSigner(session), session.signingKey);
 				}
