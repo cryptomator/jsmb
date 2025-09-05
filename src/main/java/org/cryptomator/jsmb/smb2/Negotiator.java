@@ -245,9 +245,17 @@ public record Negotiator(TcpServer server, Connection connection) {
 					header.status(NTStatus.STATUS_MORE_PROCESSING_REQUIRED);
 					var response = new SessionSetupResponse(header.build());
 					session.ntlmSession = awaitingAuthentication;
-					return response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
+
+					var fullResponse = response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
+					var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
+					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
+					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, fullResponse.serialize()));
+					return fullResponse;
 				}
 				case NtlmSession.AwaitingAuthentication s -> {
+					var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
+					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
+
 					var authenticated = s.authenticate(gssToken.token(), "user", "password", "DOMAIN"); // FIXME hardcoded credentials
 					header.status(NTStatus.STATUS_SUCCESS);
 					header.creditResponse((char) 8192);
@@ -255,8 +263,8 @@ public record Negotiator(TcpServer server, Connection connection) {
 					session.ntlmSession = authenticated;
 					session.sessionKey = authenticated.exportedSessionKey(); // step 6
 					session.fullSessionKey = session.sessionKey;
-					session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
-					session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
+					session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
+					session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
 					var response = new SessionSetupResponse(header.build()).withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
 					assert Objects.equals(connection.dialect, "3.1.1");
 					return response.sign(session.signingKey, connection); // step 12
