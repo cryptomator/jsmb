@@ -13,5 +13,7 @@ public class Global {
 
 	public final boolean encryptData = true;
 	public final boolean rejectUnencryptedAccess = true;
+	public final boolean requireMessageSigning = true;
+
 	public final boolean isMultiChannelCapable = false;
 }

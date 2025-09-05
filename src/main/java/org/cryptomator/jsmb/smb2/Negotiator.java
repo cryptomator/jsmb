@@ -64,7 +64,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		connection.negotiateDialect = Dialects.SMB3_1_1;
 		connection.clientSecurityMode = request.securityMode();
 		connection.supportsMultiCredit = true;
-		connection.serverSecurityMode = (char) (SecurityMode.SIGNING_ENABLED | request.securityMode() & SecurityMode.SIGNING_REQUIRED);
+		connection.serverSecurityMode = (char) (SecurityMode.SIGNING_ENABLED | (connection.global.requireMessageSigning ? SecurityMode.SIGNING_REQUIRED : 0));
 		connection.serverCapabilities = GlobalCapabilities.SMB2_GLOBAL_CAP_LARGE_MTU;
 		LOG.debug("Client supports SMB 3.1.1");
 
