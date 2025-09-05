@@ -27,6 +27,7 @@ public class ConnectIT {
 				.withMultiProtocolNegotiate(true) //
 				.withEncryptData(true) //
 				.withSigningEnabled(true) //
+				.withSigningRequired(true) //
 				.build();
 		client = new SMBClient(config);
 	}
