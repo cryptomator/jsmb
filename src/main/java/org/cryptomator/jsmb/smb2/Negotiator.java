@@ -29,6 +29,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
 
@@ -161,22 +162,32 @@ public record Negotiator(TcpServer server, Connection connection) {
 	}
 
 	public SMB2Message sessionSetup(SessionSetupRequest request) {
-		if (connection.negotiateDialect != Dialects.SMB3_1_1) {
+		var global = connection.global;
+		assert global.encryptData;
+		assert global.rejectUnencryptedAccess;
+		if (/* assertions && */ (connection.negotiateDialect != Dialects.SMB3_1_1 || !Objects.equals(connection.dialect, "3.1.1"))) { //Step 1
 			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
-		if ((connection.clientCapabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0) {
+		if (/* assertions && */ (connection.clientCapabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0) { //Step 2
 			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
 		final Session session;
-		if (request.header().sessionId() == 0L) {
+		if (request.header().sessionId() == 0L) { //Step 3
+			//See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/ea10b7ae-b053-4e4c-ab31-a48f7d0a79af
 			session = Session.create(connection);
 			Thread.currentThread().setName("Session-" + session.sessionId);
 			session.state = Session.State.IN_PROGRESS;
 			session.preauthIntegrityHashValue = connection.preauthIntegrityHashValue;
-		} else if ((request.flags() & SessionSetupRequest.FLAG_BINDING) != 0) {
+			return gssAuthenticate(request, session);
+		}
+
+		//Step 4
+		if (global.isMultiChannelCapable && (request.flags() & SessionSetupRequest.FLAG_BINDING) != 0) {
 			// TODO implement according to step 4:
 			// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/e545352b-9f2b-4c5e-9350-db46e4f6755e
 			throw new UnsupportedOperationException("multi channel not yet supported");
+		} else if(!global.isMultiChannelCapable && (request.flags() & SessionSetupRequest.FLAG_BINDING) != 0) {
+			return ErrorResponse.create(request, NTStatus.STATUS_REQUEST_NOT_ACCEPTED);
 		} else {
 			// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/b495e2da-8711-4772-b292-453be0394b49
 			// The server MUST look up the Session in Connection.SessionTable by using the SessionId in the SMB2 header of the request.
@@ -187,10 +198,21 @@ public record Negotiator(TcpServer server, Connection connection) {
 			}
 		}
 		assert session != null;
-		if (session.state == Session.State.EXPIRED || session.state == Session.State.VALID) {
-			// TODO reauthenticate according to https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
+		if (session.state == Session.State.EXPIRED) { //Step 5
+			//See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
+			session.state = Session.State.IN_PROGRESS;
+			session.securityContext = null;
+			return gssAuthenticate(request, session);
+		} else if (session.state == Session.State.VALID) { //Step 6
+			//See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
+			return gssAuthenticate(request, session);
+		} else { //Step 7
+			return gssAuthenticate(request, session);
 		}
+	}
 
+	//https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654
+	private SMB2Message gssAuthenticate(SessionSetupRequest request, Session session) {
 		// create response
 		var header = PacketHeader.builder();
 		header.creditCharge((char) 0);

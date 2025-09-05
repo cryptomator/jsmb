@@ -10,6 +10,7 @@ public interface NTStatus {
 	// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55
 	int STATUS_SUCCESS = 0x00000000;
 	int STATUS_SMB_NO_PREAUTH_INTEGRITY_HASH_OVERLAP = 0xC05D0000;
+	int STATUS_REQUEST_NOT_ACCEPTED = 0xC00000D0;
 
 	// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb/6ab6ca20-b404-41fd-b91a-2ed39e3762ea
 	int STATUS_MORE_PROCESSING_REQUIRED = 0xC0000016;
