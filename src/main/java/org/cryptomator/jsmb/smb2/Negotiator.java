@@ -167,7 +167,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		var global = connection.global;
 		assert global.encryptData;
 		assert global.rejectUnencryptedAccess;
-		if (/* assertions && */ (connection.negotiateDialect != Dialects.SMB3_1_1 || !Objects.equals(connection.dialect, "3.1.1"))) { //Step 1
+		if (/* assertions && */ (!Objects.equals(connection.dialect, "3.1.1"))) { //Step 1
 			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
 		if (/* assertions && */ (connection.clientCapabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0) { //Step 2
