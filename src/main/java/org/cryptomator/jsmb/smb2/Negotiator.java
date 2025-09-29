@@ -7,7 +7,6 @@ import org.cryptomator.jsmb.asn1.NegotiationToken;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.common.NTStatusException;
 import org.cryptomator.jsmb.ntlmv2.NtlmSession;
-import org.cryptomator.jsmb.smb2.crypto.MessageSigner;
 import org.cryptomator.jsmb.smb2.crypto.NistSP800108KDF;
 import org.cryptomator.jsmb.smb2.negotiate.CompressionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.EncryptionCapabilities;
@@ -29,6 +28,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
 
@@ -63,7 +63,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		connection.negotiateDialect = Dialects.SMB3_1_1;
 		connection.clientSecurityMode = request.securityMode();
 		connection.supportsMultiCredit = true;
-		connection.serverSecurityMode = (char) (SecurityMode.SIGNING_ENABLED | request.securityMode() & SecurityMode.SIGNING_REQUIRED);
+		connection.serverSecurityMode = (char) (SecurityMode.SIGNING_ENABLED | (connection.global.requireMessageSigning ? SecurityMode.SIGNING_REQUIRED : 0));
 		connection.serverCapabilities = GlobalCapabilities.SMB2_GLOBAL_CAP_LARGE_MTU;
 		LOG.debug("Client supports SMB 3.1.1");
 
@@ -82,7 +82,9 @@ public record Negotiator(TcpServer server, Connection connection) {
 			connection.cipherId = UInt16.stream(requestedEncryptionCapabilities.ciphers()).anyMatch(c -> c == EncryptionCapabilities.AES_256_GCM)
 					? EncryptionCapabilities.AES_256_GCM
 					: EncryptionCapabilities.NO_COMMON_CIPHER;
-			connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION;
+			if (connection.cipherId != EncryptionCapabilities.NO_COMMON_CIPHER) {
+				connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION;
+			}
 		}
 
 		// SMB2_COMPRESSION_CAPABILITIES TODO
@@ -218,6 +220,11 @@ public record Negotiator(TcpServer server, Connection connection) {
 
 	//https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654
 	private SMB2Message gssAuthenticate(SessionSetupRequest request, Session session) {
+		assert session.connection == connection;
+		if ((request.flags() & SessionSetupRequest.FLAG_BINDING) != 0) {
+			//Please mind TcpConnection#channelSigningKey
+			throw new UnsupportedOperationException("SMB2_SESSION_FLAG_BINDING not yet supported");
+		}
 		// create response
 		var header = PacketHeader.builder();
 		header.creditCharge((char) 0);
@@ -251,7 +258,8 @@ public record Negotiator(TcpServer server, Connection connection) {
 					session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
 					session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
 					var response = new SessionSetupResponse(header.build()).withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
-					return response; //.sign(new MessageSigner(session));
+					assert Objects.equals(connection.dialect, "3.1.1");
+					return response.sign(session.signingKey, connection); // step 12
 				}
 				case NtlmSession.Authenticated _ -> throw new IllegalStateException("Session already authenticated");
 			}

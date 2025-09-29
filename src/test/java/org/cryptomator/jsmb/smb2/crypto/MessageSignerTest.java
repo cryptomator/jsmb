@@ -1,9 +1,7 @@
 package org.cryptomator.jsmb.smb2.crypto;
 
-import org.cryptomator.jsmb.smb2.Session;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
 import java.util.Base64;
@@ -17,8 +15,7 @@ class MessageSignerTest {
 		ByteBuffer.wrap(nonce) //
 				.putLong(0, 2L) //
 				.putInt(8, 1);
-		var session = Mockito.mock(Session.class);
-		var signer = new MessageSigner(session);
+		var signer = new MessageSigner();
 
 		var signature = signer.gmac(data, nonce, Base64.getDecoder().decode("9fORJ+Vx1QUv43YChZvR6A=="));
 
@@ -37,8 +34,7 @@ class MessageSignerTest {
 		 */
 		var data = Base64.getDecoder().decode("uaY8hb18uTydJUNXIJmsCgsatN3b6kx1us+rl1WudjyxBipZTdqcqGATTHR3Z1KtNXz9oy0cIOiWNw2sWAjBRwYe0VRaKm/yb+Lg4uOOyIfB4hDOytSoyaht");
 		var nonce = Base64.getDecoder().decode("RDlcpJQ6yiSHWiga");
-		var session = Mockito.mock(Session.class);
-		var signer = new MessageSigner(session);
+		var signer = new MessageSigner();
 
 		var signature = signer.gmac(data, nonce, Base64.getDecoder().decode("pIURFzKKk79Sg4LyLzWslGiCWf0vUX5P0n7pz5uMiiw="));
 

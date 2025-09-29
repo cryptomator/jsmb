@@ -1,10 +1,9 @@
 package org.cryptomator.jsmb.smb2.crypto;
 
-import org.cryptomator.jsmb.ntlmv2.NtlmSession;
 import org.cryptomator.jsmb.smb2.Command;
+import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.PacketHeader;
 import org.cryptomator.jsmb.smb2.SMB2Message;
-import org.cryptomator.jsmb.smb2.Session;
 import org.cryptomator.jsmb.smb2.negotiate.SigningCapabilities;
 import org.cryptomator.jsmb.util.Bytes;
 import org.cryptomator.jsmb.util.Layouts;
@@ -17,10 +16,12 @@ import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
+import java.util.Objects;
 
 /**
  * Signs an SMB2 message.
@@ -33,30 +34,34 @@ public class MessageSigner {
 	private static final int NONCE_FLAG_IS_SERVER = 0b1;
 	private static final int NONCE_FLAG_IS_CANCEL = 0b10;
 
-	private final Session session;
-
-	public MessageSigner(Session session) {
-		this.session = session;
+	public PacketHeader sign(SMB2Message message, byte[] signingKey, Connection connection) {
+		assert Objects.equals(connection.dialect, "3.1.1");
+		return sign(message, signingKey, connection.signingAlgorithmId);
 	}
 
-	public PacketHeader sign(SMB2Message message) {
-		if (session.signingKey == null) {
+	/**
+	 * @implNote Requires dialect 3.1.1
+	 */
+	@VisibleForTesting
+	PacketHeader sign(SMB2Message message, byte[] signingKey, char signingAlgorithmId) {
+		if (signingKey == null) {
 			throw new IllegalStateException("Signing key not set");
 		}
 		var newHeader = message.header().copy().signature(new byte[16]); // zero out any existing signature
-		//newHeader.flags(message.header().flags() | SMB2Message.Flags.SIGNED);
+		newHeader.flags(message.header().flags() | SMB2Message.Flags.SIGNED);
 
-		if (session.connection.signingAlgorithmId == SigningCapabilities.AES_GMAC) {
+		if (signingAlgorithmId == SigningCapabilities.AES_GMAC) {
 			byte[] nonce = new byte[12];
 			int flags = NONCE_FLAG_IS_SERVER;
 			if (message.header().command() == Command.CANCEL.value()) {
 				flags |= NONCE_FLAG_IS_CANCEL;
 			}
 			ByteBuffer.wrap(nonce) //
+					.order(ByteOrder.LITTLE_ENDIAN) //
 					.putLong(0, message.header().messageId()) //
 					.putInt(8, flags);
-			byte[] data = Bytes.concat(newHeader.segment().toArray(Layouts.BYTE), message.segment().toArray(Layouts.BYTE)); // FIXME??
-			byte[] signature = gmac(data, nonce, session.signingKey); // TODO: which key to use?
+			byte[] data = Bytes.concat(newHeader.segment().toArray(Layouts.BYTE), message.segment().toArray(Layouts.BYTE));
+			byte[] signature = gmac(data, nonce, signingKey);
 			return newHeader.signature(signature).build();
 		} else {
 			throw new UnsupportedOperationException("Only GMAC implemented");
