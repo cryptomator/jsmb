@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb.smb2.crypto;
 
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.PacketHeader;
@@ -12,6 +13,7 @@ import org.jetbrains.annotations.VisibleForTesting;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.Mac;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -34,6 +36,8 @@ public class MessageSigner {
 	private static final int NONCE_FLAG_IS_SERVER = 0b1;
 	private static final int NONCE_FLAG_IS_CANCEL = 0b10;
 
+	private static final BouncyCastleProvider bcProvider = new BouncyCastleProvider();
+
 	public PacketHeader sign(SMB2Message message, byte[] signingKey, Connection connection) {
 		assert Objects.equals(connection.dialect, "3.1.1");
 		return sign(message, signingKey, connection.signingAlgorithmId);
@@ -50,7 +54,11 @@ public class MessageSigner {
 		var newHeader = message.header().copy().signature(new byte[16]); // zero out any existing signature
 		newHeader.flags(message.header().flags() | SMB2Message.Flags.SIGNED);
 
-		if (signingAlgorithm == SigningCapabilities.Algorithm.AES_GMAC) {
+		if (signingAlgorithm == null || signingAlgorithm == SigningCapabilities.Algorithm.AES_CMAC) {
+			byte[] data = Bytes.concat(newHeader.segment().toArray(Layouts.BYTE), message.segment().toArray(Layouts.BYTE));
+			byte[] signature = cmac(data, signingKey);
+			return newHeader.signature(signature).build();
+		} else if (signingAlgorithm == SigningCapabilities.Algorithm.AES_GMAC) {
 			byte[] nonce = new byte[12];
 			int flags = NONCE_FLAG_IS_SERVER;
 			if (message.header().command() == Command.CANCEL.value()) {
@@ -86,4 +94,16 @@ public class MessageSigner {
 		}
 	}
 
+	@VisibleForTesting
+	byte[] cmac(byte[] data, byte[] signingKeyBytes) {
+		try {
+			Mac mac = Mac.getInstance("AESCMAC", bcProvider);
+			mac.init(new SecretKeySpec(signingKeyBytes, "AES128"));
+			return mac.doFinal(data);
+		} catch (NoSuchAlgorithmException e) {
+			throw new AssertionError("AESCMAC should be provided by Bouncy Castle", e);
+		} catch (InvalidKeyException e) {
+			throw new IllegalArgumentException("Invalid key or algorithm parameter", e);
+		}
+	}
 }

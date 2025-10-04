@@ -5,8 +5,11 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Base64;
+import java.util.HexFormat;
 
 class MessageSignerTest {
+
+	private final static HexFormat HEX_FORMAT = HexFormat.of();
 
 	@Test
 	public void testGmacSignature() {
@@ -42,4 +45,19 @@ class MessageSignerTest {
 
 	}
 
+	@Test
+	public void testCMAC() {
+		// test vector from NIST Cryptographic Standards and Guidelines: https://csrc.nist.gov/projects/cryptographic-standards-and-guidelines/example-values (https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/AES_CMAC.pdf)
+		/*
+		Key = 2B7E1516 28AED2A6 ABF71588 09CF4F3C
+		PT = 6BC1BEE2 2E409F96 E93D7E11 7393172A
+		Last Block > Block #1 > outBlock = 070A16B4 6B4D4144 F79BDD9D D04A287C
+		 */
+		var data = HEX_FORMAT.parseHex("6bc1bee22e409f96e93d7e117393172a");
+		var signer = new MessageSigner();
+
+		var signature = signer.cmac(data, HEX_FORMAT.parseHex("2b7e151628aed2a6abf7158809cf4f3c"));
+
+		Assertions.assertEquals("070a16b46b4d4144f79bdd9dd04a287c", HEX_FORMAT.formatHex(signature));
+	}
 }
