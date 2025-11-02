@@ -82,9 +82,6 @@ public record Negotiator(TcpServer server, Connection connection) {
 			connection.cipherId = UInt16.stream(requestedEncryptionCapabilities.ciphers()).anyMatch(c -> c == EncryptionCapabilities.AES_256_GCM)
 					? EncryptionCapabilities.AES_256_GCM
 					: EncryptionCapabilities.NO_COMMON_CIPHER;
-			if (connection.cipherId != EncryptionCapabilities.NO_COMMON_CIPHER) {
-				connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION;
-			}
 		}
 
 		// SMB2_COMPRESSION_CAPABILITIES TODO
@@ -158,6 +155,13 @@ public record Negotiator(TcpServer server, Connection connection) {
 
 		// update preauth hash
 		connection.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(connection.preauthIntegrityHashValue, response.serialize()));
+
+		// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/b39f253e-4963-40df-8dff-2f9040ebbeb1 makes two provisions regarding SMB2_GLOBAL_CAP_ENCRYPTION:
+		// 1) Response.Capabilities must contain the flag iff (Connection.Dialect is 3.0 or 3.0.2) and [...].
+		// 2) Connection.ServerCapabilities [which is set by Response.Capabilities] must additionally contain the flag if Connection.CipherId is not NO_COMMON_CIPHER [for uses such as "§3.3.5.2.11 Verifying the Tree Connect"].
+		if (connection.cipherId != EncryptionCapabilities.NO_COMMON_CIPHER) {
+			connection.serverCapabilities |= SMB2_GLOBAL_CAP_ENCRYPTION;
+		}
 
 		return response;
 	}
