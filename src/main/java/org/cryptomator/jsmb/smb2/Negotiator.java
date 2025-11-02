@@ -140,6 +140,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		}
 		// SMB2_SIGNING_CAPABILITIES
 		if (request.negotiateContext(SigningCapabilities.class) != null) {
+			assert connection.signingAlgorithmId != null : "Never null if a SigningCapabilities NegotiateContext is present";
 			contexts.add(SigningCapabilities.build(connection.signingAlgorithmId.getValue()));
 		}
 		// SMB2_TRANSPORT_CAPABILITIES

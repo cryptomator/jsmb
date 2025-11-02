@@ -53,7 +53,6 @@ class MessageSignerTest {
 		var signature = signer.gmac(data, nonce, Base64.getDecoder().decode("pIURFzKKk79Sg4LyLzWslGiCWf0vUX5P0n7pz5uMiiw="));
 
 		Assertions.assertEquals("GxPmEyQV/XDZCS4y/ydZvg==", Base64.getEncoder().encodeToString(signature));
-
 	}
 
 	@Test

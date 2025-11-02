@@ -10,6 +10,7 @@ import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.smb2.negotiate.SigningCapabilities;
 import org.cryptomator.jsmb.util.Bytes;
 import org.cryptomator.jsmb.util.Layouts;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import javax.crypto.BadPaddingException;
@@ -48,7 +49,7 @@ public class MessageSigner {
 	 * @implNote Requires dialect 3.1.1
 	 */
 	@VisibleForTesting
-	PacketHeader sign(SMB2Message message, byte[] signingKey, SigningCapabilities.Algorithm signingAlgorithm) {
+	PacketHeader sign(SMB2Message message, byte[] signingKey, @Nullable SigningCapabilities.Algorithm signingAlgorithm) {
 		if (signingKey == null) {
 			throw new IllegalStateException("Signing key not set");
 		}

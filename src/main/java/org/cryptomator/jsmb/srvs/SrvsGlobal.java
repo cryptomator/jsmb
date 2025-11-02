@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb.srvs;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -17,6 +18,6 @@ public class SrvsGlobal {
 	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-srvs/cb311421-de4d-4cd7-bb05-ce52e03814e4">Inserting an entry</a>
 	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-srvs/d5a84302-764b-4d19-942c-4ec6eacc2703">Removing an entry</a>
 	 */
-	public final Map<Integer, SrvsSession> sessionList = new HashMap<>(); //Map<GlobalSessionId,SrvsSession> instead of List to make lookup easier
+	public final Map<Integer, SrvsSession> sessionList = Collections.synchronizedMap(new HashMap<>()); //Map<GlobalSessionId,SrvsSession> instead of List to make lookup easier
 
 }

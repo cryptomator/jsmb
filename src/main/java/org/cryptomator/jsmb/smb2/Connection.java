@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.smb2.negotiate.PreauthIntegrityCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.SigningCapabilities;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,6 +34,7 @@ public class Connection {
 	public char preauthIntegrityHashId = PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512;
 	public byte[] preauthIntegrityHashValue = new byte[64];
 	public char cipherId;
+	@Nullable
 	public SigningCapabilities.Algorithm signingAlgorithmId;
 	public char[] compressionIds;
 	public boolean supportsChainedCompression;
