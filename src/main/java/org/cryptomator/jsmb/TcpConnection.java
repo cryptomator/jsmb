@@ -176,11 +176,11 @@ class TcpConnection implements Runnable {
 	 *
 	 * @apiNote This method implements the following specification from
 	 * <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d594481c-f6d5-4de5-8842-9099063d41e7">Signing the Message:</a>
-	 * <i>
+	 * <blockquote>
 	 * <p>[...] For all other responses being signed the server
 	 * MUST provide <b>Channel.SigningKey</b> by looking up the <b>Channel</b> in <b>Session.ChannelList</b>,
 	 * where the connection matches the <b>Channel.Connection</b>.</p>
-	 * </i>
+	 * </blockquote>
 	 * @implNote The current implementation of this method depends on two simplifications:
 	 * <ul>
 	 *     <li>
