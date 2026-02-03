@@ -89,7 +89,10 @@ public sealed interface NtlmSession permits NtlmSession.Initial, NtlmSession.Awa
 				throw new IllegalArgumentException("Expected AUTHENTICATE_MESSAGE, got " + msg);
 			}
 
-			if (authenticateMessage.ntChallengeResponseLen() <= 24) {
+			if (authenticateMessage.ntChallengeResponseLen() == 0) {
+				throw new AuthenticationFailedException(NTStatus.STATUS_NOT_SUPPORTED, "NTLM: NT required");
+			}
+			if (!authenticateMessage.isNtlmV2()) {
 				throw new AuthenticationFailedException(NTStatus.STATUS_NOT_SUPPORTED, "Only NTLMv2 is supported");
 			}
 			var response = Authenticator.ntlmV2Auth(challengeMessage, authenticateMessage, user, password, domain);
