@@ -17,6 +17,10 @@ import static org.cryptomator.jsmb.ntlmv2.NegotiateFlags.isSet;
 class Authenticator {
 
 	public static AuthResponse ntlmV2Auth(NtlmChallengeMessage challengeMessage, NtlmAuthenticateMessage authenticateMessage, String user, String passwd, String userDom) throws AuthenticationFailedException {
+		// See NTLMv2 check and its preconditions in caller method
+		assert authenticateMessage.ntChallengeResponseLen() != 0 && authenticateMessage.isNtlmV2();
+
+		// Anonymous authentication already denied by assertions above
 		if (authenticateMessage.userNameLen() == 0
 				&& authenticateMessage.ntChallengeResponseLen() == 0
 				&& (authenticateMessage.lmChallengeResponseLen() == 0 || Arrays.equals(new byte[]{0x00}, authenticateMessage.lmChallengeResponse()))) {
@@ -28,18 +32,19 @@ class Authenticator {
 
 		var ntlmV2Response = authenticateMessage.ntlmV2Response();
 		byte[] challengeFromClient;
-		if (authenticateMessage.ntChallengeResponseLen() > 0x0018) {
+		if (authenticateMessage.isNtlmV2()) { // <==> authenticateMessage.ntChallengeResponseLen() > 0x0018
 			challengeFromClient = ntlmV2Response.challengeFromClient();
 		} else if (isSet(challengeMessage.negotiateFlags(), NegotiateFlags.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY)) {
-			throw new UnsupportedOperationException("Not yet implemented");
+			throw new UnsupportedOperationException("Only NTLMv2 is supported (got NTLMv1 with extended session security)");
 		} else {
-			throw new UnsupportedOperationException("Not yet implemented");
+			throw new UnsupportedOperationException("Only NTLMv2 is supported (got NTLMv1)");
 		}
 		var serverChallenge = challengeMessage.serverChallenge();
 		var time = ntlmV2Response.timestamp();
 		var expectedResponse = computeResponse(responseKeyNT, responseKeyLM, serverChallenge, challengeFromClient, time, ntlmV2Response.avPairsSegment().toArray(Layouts.BYTE));
 
 		if (!Arrays.equals(expectedResponse.ntChallengeResponse(), authenticateMessage.ntChallengeResponse())) {
+			// Note: LM authentication is omitted on purpose
 			// TODO: spec recommends retrying with NIL domain to maximize comnpatibility
 			throw new AuthenticationFailedException(NTStatus.STATUS_LOGON_FAILURE, "Invalid challenge response");
 		}

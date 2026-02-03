@@ -11,6 +11,13 @@ import java.lang.foreign.MemorySegment;
  */
 record LmV2Response(MemorySegment segment) {
 
+	LmV2Response {
+		if (!isV2(segment())) {
+			throw new IllegalArgumentException("Invalid segment version or format");
+		}
+		throw new UnsupportedOperationException("LM not supported");
+	}
+
 	byte[] challengeResponse() {
 		return segment.asSlice(0, 16).toArray(Layouts.BYTE);
 	}
@@ -19,4 +26,7 @@ record LmV2Response(MemorySegment segment) {
 		return segment.asSlice(16, 8).toArray(Layouts.BYTE);
 	}
 
+	static boolean isV2(MemorySegment segment) {
+		throw new UnsupportedOperationException();
+	}
 }
