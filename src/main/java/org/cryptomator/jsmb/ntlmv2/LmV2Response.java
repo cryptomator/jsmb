@@ -12,9 +12,7 @@ import java.lang.foreign.MemorySegment;
 record LmV2Response(MemorySegment segment) {
 
 	LmV2Response {
-		if (!isV2(segment())) {
-			throw new IllegalArgumentException("Invalid segment version or format");
-		}
+		// See NtlmV2Response for constructor template
 		throw new UnsupportedOperationException("LM not supported");
 	}
 
@@ -27,6 +25,6 @@ record LmV2Response(MemorySegment segment) {
 	}
 
 	static boolean isV2(MemorySegment segment) {
-		throw new UnsupportedOperationException();
+		throw new UnsupportedOperationException("Not implemented");
 	}
 }
