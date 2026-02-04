@@ -45,7 +45,7 @@ class Authenticator {
 
 		if (!Arrays.equals(expectedResponse.ntChallengeResponse(), authenticateMessage.ntChallengeResponse())) {
 			// Note: LM authentication is omitted on purpose
-			// TODO: spec recommends retrying with NIL domain to maximize comnpatibility
+			// TODO: spec recommends retrying with NIL domain to maximize compatibility
 			throw new AuthenticationFailedException(NTStatus.STATUS_LOGON_FAILURE, "Invalid challenge response");
 		}
 

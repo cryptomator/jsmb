@@ -61,7 +61,7 @@ record NtlmV2Response(MemorySegment segment) {
 	 * @param segment A segment containing an {@code NtChallengeResponse:} Either {@code NtlmResponse (NTLM_RESPONSE)} or {@code NtlmV2Response (NTLMv2_RESPONSE.)}
 	 * @return true if the structure of the given response segment is congruent with {@code NTLMv2;} false otherwise.</br>
 	 * The result of calling this method with a malformed response segment is undefined.
-	 * @throws IllegalArgumentException if the given response segement is empty and therefore can't possibly represent a valid {@code NtChallengeResponse.}
+	 * @throws IllegalArgumentException if the given response segment is empty and therefore can't possibly represent a valid {@code NtChallengeResponse.}
 	 * @implNote The NTLM specification does not make any provisions about determining the NTLM version <i>during</i> authentication,
 	 * opting instead to note that the NTLM version must be configured <i>beforehand.</i></br>
 	 * Example from <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/5e550938-91d4-459f-b67d-75d70009e3f3">3.3.2 NTLM v2 Authentication:</a>
