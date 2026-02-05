@@ -207,4 +207,26 @@ record NtlmAuthenticateMessage(MemorySegment segment) implements NtlmMessage {
 		segment.asSlice(72, 16).copyFrom(MemorySegment.ofArray(mic));
 	}
 
+	/**
+	 * Indicates whether this message (and consequently the overall authentication flow) uses {@code NTLMv2.}
+	 *
+	 * @return true if the structure of this message is congruent with {@code NTLMv2;} false otherwise.</br>
+	 * The result of calling this method on a malformed message is undefined.
+	 * @throws IllegalArgumentException if there is no {@link #ntChallengeResponse()} {@code (ntChallengeResponseLen == 0.)}
+	 * @apiNote This method is based on the following specification from
+	 * <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/033d32cc-88f9-4483-9bf2-b273055038ce">AUTHENTICATE_MESSAGE:</a>
+	 * <blockquote>
+	 * <p><b>NtChallengeResponse (variable):</b> An <b>NTLM_RESPONSE</b> structure (section 2.2.2.6) or <b>NTLMv2_RESPONSE</b> structure
+	 * (section 2.2.2.8) that contains the computed NT response to the challenge. If NTLM v2 authentication is configured,
+	 * <b>NtChallengeResponse</b> MUST be an <b>NTLMv2_RESPONSE</b>. Otherwise, it MUST be an <b>NTLM_RESPONSE</b>.</p>
+	 * </blockquote>
+	 * @implNote This method only accepts messages containing an {@code NtChallengeResponse.}
+	 * In such messages the logical <i>implication</i> {@code NTLMv2_RESPONSE -> NTLMv2} becomes an <i>equivalence</i> {@code (NTLMv2_RESPONSE <-> NTLMv2.)}
+	 */
+	public boolean isNtlmV2() {
+		if (ntChallengeResponseLen() == 0) {
+			throw new IllegalArgumentException("NTLM: NT required");
+		}
+		return NtlmV2Response.isV2(ntChallengeResponseSegment());
+	}
 }

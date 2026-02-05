@@ -7,30 +7,45 @@ import org.cryptomator.jsmb.util.Layouts;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
+import static org.cryptomator.jsmb.ntlmv2.NegotiateFlags.isSet;
+
 /**
  * Performs the NTLM v2 Authentication
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/f9e6fbc4-a953-4f24-b229-ccdcc213b9ec">Server Receives an AUTHENTICATE_MESSAGE from the Client</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/5e550938-91d4-459f-b67d-75d70009e3f3">NTLM v2 Authentication</a>
  */
 class Authenticator {
 
 	public static AuthResponse ntlmV2Auth(NtlmChallengeMessage challengeMessage, NtlmAuthenticateMessage authenticateMessage, String user, String passwd, String userDom) throws AuthenticationFailedException {
-		byte[] responseKeyNT = NTOWFv2(passwd, user, userDom);
-		byte[] responseKeyLM = LMOWFv2(passwd, user, userDom);
-		var serverChallenge = challengeMessage.serverChallenge();
+		// See NTLMv2 check and its preconditions in caller method
+		assert authenticateMessage.ntChallengeResponseLen() != 0 && authenticateMessage.isNtlmV2();
 
+		// Anonymous authentication already denied by assertions above
 		if (authenticateMessage.userNameLen() == 0
 				&& authenticateMessage.ntChallengeResponseLen() == 0
 				&& (authenticateMessage.lmChallengeResponseLen() == 0 || Arrays.equals(new byte[]{0x00}, authenticateMessage.lmChallengeResponse()))) {
 			throw new AuthenticationFailedException(NTStatus.STATUS_LOGON_FAILURE, "Anonymouse authentication disabled");
 		}
 
+		byte[] responseKeyNT = NTOWFv2(passwd, user, userDom);
+		byte[] responseKeyLM = LMOWFv2(passwd, user, userDom);
+
 		var ntlmV2Response = authenticateMessage.ntlmV2Response();
-		byte[] challengeFromClient = ntlmV2Response.challengeFromClient();
+		byte[] challengeFromClient;
+		if (authenticateMessage.isNtlmV2()) { // <==> authenticateMessage.ntChallengeResponseLen() > 0x0018
+			challengeFromClient = ntlmV2Response.challengeFromClient();
+		} else if (isSet(challengeMessage.negotiateFlags(), NegotiateFlags.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY)) {
+			throw new UnsupportedOperationException("Only NTLMv2 is supported (got NTLMv1 with extended session security)");
+		} else {
+			throw new UnsupportedOperationException("Only NTLMv2 is supported (got NTLMv1)");
+		}
+		var serverChallenge = challengeMessage.serverChallenge();
 		var time = ntlmV2Response.timestamp();
 		var expectedResponse = computeResponse(responseKeyNT, responseKeyLM, serverChallenge, challengeFromClient, time, ntlmV2Response.avPairsSegment().toArray(Layouts.BYTE));
 
 		if (!Arrays.equals(expectedResponse.ntChallengeResponse(), authenticateMessage.ntChallengeResponse())) {
-			// TODO: spec recommends retrying with NIL domain to maximize comnpatibility
+			// Note: LM authentication is omitted on purpose
+			// TODO: spec recommends retrying with NIL domain to maximize compatibility
 			throw new AuthenticationFailedException(NTStatus.STATUS_LOGON_FAILURE, "Invalid challenge response");
 		}
 

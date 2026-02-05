@@ -1,12 +1,23 @@
 package org.cryptomator.jsmb;
 
 import org.cryptomator.jsmb.common.MalformedMessageException;
+import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.common.SMBMessage;
 import org.cryptomator.jsmb.smb1.SMB1MessageParser;
 import org.cryptomator.jsmb.smb1.SMB1Negotiator;
 import org.cryptomator.jsmb.smb1.SmbComNegotiateRequest;
-import org.cryptomator.jsmb.smb2.*;
+import org.cryptomator.jsmb.smb2.Connection;
+import org.cryptomator.jsmb.smb2.LogoffRequest;
+import org.cryptomator.jsmb.smb2.NegotiateRequest;
+import org.cryptomator.jsmb.smb2.Negotiator;
+import org.cryptomator.jsmb.smb2.Runtime;
+import org.cryptomator.jsmb.smb2.SMB2Message;
+import org.cryptomator.jsmb.smb2.SMB2MessageParser;
+import org.cryptomator.jsmb.smb2.Session;
+import org.cryptomator.jsmb.smb2.SessionSetupRequest;
+import org.cryptomator.jsmb.smb2.SessionSetupResponse;
 import org.cryptomator.jsmb.util.Layouts;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,6 +25,10 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.net.Socket;
+import java.util.Arrays;
+import java.util.Objects;
+
+import static org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
 
 class TcpConnection implements Runnable {
 
@@ -23,12 +38,14 @@ class TcpConnection implements Runnable {
 	private final Socket socket;
 	private final Connection connection;
 	private final Negotiator negotiator;
+	private final Runtime runtime;
 
 	public TcpConnection(TcpServer server, Socket socket) {
 		this.server = server;
 		this.socket = socket;
 		this.connection = new Connection(server.global);
 		this.negotiator = new Negotiator(server, connection);
+		this.runtime = new Runtime(connection);
 	}
 
 	@Override
@@ -85,9 +102,10 @@ class TcpConnection implements Runnable {
 			var response = switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
+				case LogoffRequest request -> runtime.logoff(request);
 				default -> throw new MalformedMessageException("Command not implemented: " + msg.header().command());
 			};
-			writeResponse(response);
+			writeResponse(sign(msg, response));
 			nextCommand = msg.header().nextCommand();
 		} while (nextCommand != 0);
 	}
@@ -105,5 +123,80 @@ class TcpConnection implements Runnable {
 		} catch (IOException e) {
 			LOG.error("Exception while writing response", e);
 		}
+	}
+
+	private SMBMessage sign(SMB2Message request, SMB2Message response) {
+		var sessionId = response.header().sessionId();
+		var session = connection.sessionTable.get(sessionId);
+		assert (sessionId == 0) == (session == null);
+		if (shouldSign(request, response, session)) {
+			assert Objects.equals(connection.dialect, "3.1.1");
+			return response.sign(selectKey(response, session), connection);
+		}
+		return response;
+	}
+
+	/**
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d594481c-f6d5-4de5-8842-9099063d41e7">Signing the Message</a>
+	 */
+	private boolean shouldSign(SMB2Message request, SMB2Message response, @Nullable Session session) {
+		var signed = !Arrays.equals(request.header().signature(), new byte[16]);
+		var sessionId = response.header().sessionId();
+		var treeId = response.header().treeId();
+
+		assert signed == request.header().hasFlag(SMB2Message.Flags.SIGNED);
+		assert (sessionId == 0) == (session == null);
+		if (signed && sessionId != 0 && treeId == 0 && session.signingRequired) {
+			return true;
+		}
+		if (signed && sessionId != 0 && treeId != 0 && session.signingRequired && (!connection.global.encryptData || ((connection.clientCapabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0))) {
+			return true;
+		}
+		if (signed && !response.header().hasFlag(SMB2Message.Flags.ASYNC_COMMAND)) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d594481c-f6d5-4de5-8842-9099063d41e7">Signing the Message</a>
+	 */
+	private byte[] selectKey(SMB2Message response, Session session) {
+		if (connection.dialect.startsWith("3.")) {
+			if (response instanceof SessionSetupResponse && response.header().status() != NTStatus.STATUS_SUCCESS) {
+				return session.signingKey;
+			}
+			return channelSigningKey(session);
+		}
+		return session.sessionKey;
+	}
+
+	/**
+	 * Provides the {@code Channel.SigningKey} for signing a response.
+	 *
+	 * @apiNote This method implements the following specification from
+	 * <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d594481c-f6d5-4de5-8842-9099063d41e7">Signing the Message:</a>
+	 * <blockquote>
+	 * <p>[...] For all other responses being signed the server
+	 * MUST provide <b>Channel.SigningKey</b> by looking up the <b>Channel</b> in <b>Session.ChannelList</b>,
+	 * where the connection matches the <b>Channel.Connection</b>.</p>
+	 * </blockquote>
+	 * @implNote The current implementation of this method depends on two simplifications:
+	 * <ul>
+	 *     <li>
+	 *         {@code Negotiator.gssAuthenticate()} doesn't accept {@link SessionSetupRequest SessionSetupRequests} with
+	 *         {@link SessionSetupRequest#FLAG_BINDING} set.</br>
+	 *         Therefore the value of {@code Channel.SigningKey} is always equal to {@link Session#signingKey}</br>
+	 *         See: <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654">Handling GSS-API Authentication (step 9)</a>
+	 *     </li>
+	 *     <li>
+	 *         {@code Channel} is not implemented and therefore the value of {@code Channel.SigningKey}
+	 *         is the same for all packets of this session.
+	 *     </li>
+	 * </ul>
+	 * As a result this method will always return {@link Session#signingKey}.
+	 */
+	private byte[] channelSigningKey(Session session) {
+		return session.signingKey;
 	}
 }

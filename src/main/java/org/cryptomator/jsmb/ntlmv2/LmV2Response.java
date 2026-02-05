@@ -11,6 +11,11 @@ import java.lang.foreign.MemorySegment;
  */
 record LmV2Response(MemorySegment segment) {
 
+	LmV2Response {
+		// See NtlmV2Response for constructor template
+		throw new UnsupportedOperationException("LM not supported");
+	}
+
 	byte[] challengeResponse() {
 		return segment.asSlice(0, 16).toArray(Layouts.BYTE);
 	}
@@ -19,4 +24,7 @@ record LmV2Response(MemorySegment segment) {
 		return segment.asSlice(16, 8).toArray(Layouts.BYTE);
 	}
 
+	static boolean isV2(MemorySegment segment) {
+		throw new UnsupportedOperationException("Not implemented");
+	}
 }

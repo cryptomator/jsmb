@@ -4,6 +4,7 @@ import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.util.Bytes;
 
 import java.lang.foreign.MemorySegment;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -88,7 +89,10 @@ public sealed interface NtlmSession permits NtlmSession.Initial, NtlmSession.Awa
 				throw new IllegalArgumentException("Expected AUTHENTICATE_MESSAGE, got " + msg);
 			}
 
-			if (authenticateMessage.ntChallengeResponseLen() <= 24) {
+			if (authenticateMessage.ntChallengeResponseLen() == 0) {
+				throw new AuthenticationFailedException(NTStatus.STATUS_NOT_SUPPORTED, "NTLM: NT required");
+			}
+			if (!authenticateMessage.isNtlmV2()) {
 				throw new AuthenticationFailedException(NTStatus.STATUS_NOT_SUPPORTED, "Only NTLMv2 is supported");
 			}
 			var response = Authenticator.ntlmV2Auth(challengeMessage, authenticateMessage, user, password, domain);
@@ -118,16 +122,29 @@ public sealed interface NtlmSession permits NtlmSession.Initial, NtlmSession.Awa
 				}
 			}
 
+
+			var clientSigningKey = signKey(negFlg, exportedSessionKey, "Client");
+			var serverSigningKey = signKey(negFlg, exportedSessionKey, "Server");
 			// TODO: derive session keys and return ntlm session object
-		//		Set ClientSigningKey to SIGNKEY(NegFlg, ExportedSessionKey , "Client")
-		//		Set ServerSigningKey to SIGNKEY(NegFlg, ExportedSessionKey , "Server")
-		//		Set ClientSealingKey to SEALKEY(NegFlg, ExportedSessionKey , "Client")
-		//		Set ServerSealingKey to SEALKEY(NegFlg, ExportedSessionKey , "Server")
-			return new Authenticated();
+			//	Set ClientSealingKey to SEALKEY(NegFlg, ExportedSessionKey , "Client")
+			//	Set ServerSealingKey to SEALKEY(NegFlg, ExportedSessionKey , "Server")
+			return new Authenticated(exportedSessionKey, clientSigningKey, serverSigningKey);
+		}
+
+		// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/524cdccb-563e-4793-92b0-7bc321fce096
+		private byte[] signKey(int flags, byte[] exportedSessionKey, String mode) {
+			if ((flags & NegotiateFlags.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY) != 0) {
+				byte[] magicConstant = "Client".equals(mode)
+						? "session key to client-to-server signing key magic constant\00".getBytes(StandardCharsets.US_ASCII)
+						: "session key to server-to-client signing key magic constant\00".getBytes(StandardCharsets.US_ASCII);
+				return Crypto.md5(Bytes.concat(exportedSessionKey, magicConstant));
+			} else {
+				return new byte[0];
+			}
 		}
 
 	}
 
-	final  class Authenticated implements NtlmSession {
+	record Authenticated(byte[] exportedSessionKey, byte[] clientSigningKey, byte[] serverSigningKey) implements NtlmSession {
 	}
 }

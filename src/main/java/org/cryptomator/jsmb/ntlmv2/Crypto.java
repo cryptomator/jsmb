@@ -24,6 +24,15 @@ class Crypto {
 		}
 	}
 
+	public static byte[] md5(byte[] input) {
+		try {
+			MessageDigest md = MessageDigest.getInstance("MD5");
+			return md.digest(input);
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException("MD5 not found", e);
+		}
+	}
+
 	public static byte[] hmacMd5(byte[] key, byte[] data) {
 		try {
 			Mac mac = Mac.getInstance(HMAC_MD5_ALGORITHM);

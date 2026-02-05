@@ -4,11 +4,26 @@ import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
 
+/**
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/cb9b5d66-b6be-4d18-aa66-8784a871cc10">SMB2_SIGNING_CAPABILITIES</a>
+ */
 public record SigningCapabilities(MemorySegment data) implements NegotiateContext {
 
-	public static final char HMAC_SHA256 = 0x0000;
-	public static final char AES_CMAC = 0x0001;
-	public static final char AES_GMAC = 0x0002;
+	public enum Algorithm {
+		HMAC_SHA256(0x0000),
+		AES_CMAC(0x0001),
+		AES_GMAC(0x0002);
+
+		private final char value;
+
+		Algorithm(int value) {
+			this.value = (char) value;
+		}
+
+		public char getValue() {
+			return value;
+		}
+	}
 
 	public static SigningCapabilities build(char algId) {
 		var data = MemorySegment.ofArray(new byte[4]);

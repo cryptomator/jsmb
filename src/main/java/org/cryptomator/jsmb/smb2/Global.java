@@ -11,4 +11,9 @@ public class Global {
 	Map<Long, Session> sessionTable = new HashMap<>();
 	Map<Long, Object> clientTable = new HashMap<>(); // TODO: create Client class
 
+	public final boolean encryptData = true;
+	public final boolean rejectUnencryptedAccess = true;
+	public final boolean requireMessageSigning = true;
+
+	public final boolean isMultiChannelCapable = false;
 }
