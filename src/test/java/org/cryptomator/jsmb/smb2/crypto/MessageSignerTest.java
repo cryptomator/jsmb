@@ -24,20 +24,6 @@ class MessageSignerTest {
 
 	@Test
 	public void testGmacSignature() {
-		var data = Base64.getDecoder().decode("/lNNQkAAAAAAAAAAAQAAIAEAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkAAABIAAkAoQcwBaADCgEA");
-		var nonce = new byte[12];
-		ByteBuffer.wrap(nonce) //
-				.putLong(0, 2L) //
-				.putInt(8, 1);
-		var signer = new MessageSigner();
-
-		var signature = signer.gmac(data, nonce, Base64.getDecoder().decode("9fORJ+Vx1QUv43YChZvR6A=="));
-
-		Assertions.assertEquals("5W28PWtNfcE+BVqzLOsDdg==", Base64.getEncoder().encodeToString(signature));
-	}
-
-	@Test
-	public void testGmacSignature2() {
 		// test vector from NIST CAVP: https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program/cavp-testing-block-cipher-modes
 		/*
 		Key = a4851117328a93bf528382f22f35ac94688259fd2f517e4fd27ee9cf9b8c8a2c

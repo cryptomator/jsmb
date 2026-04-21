@@ -57,7 +57,10 @@ public class ConnectIT {
 		try (Connection connection = client.connect("localhost", server.getLocalPort())) {
 			AuthenticationContext ac = new AuthenticationContext("user", "password".toCharArray(), "DOMAIN");
 			Session session = connection.authenticate(ac);
-			Assertions.assertTrue(session.isSigningRequired());
+			// with encryption negotiated (Global.encryptData=true), the server sets SMB2_SESSION_FLAG_ENCRYPT_DATA
+			// on the final SESSION_SETUP response, which causes smbj to disable signing in favor of AEAD integrity
+			Assertions.assertTrue(session.shouldEncryptData());
+			Assertions.assertFalse(session.isSigningRequired());
 		}
 	}
 }

@@ -51,12 +51,14 @@ public class Session {
 	public boolean isAnonymous = false;
 	public Instant creationTime = Instant.now();
 	public Instant idleTime = Instant.now();
-	public boolean encryptData = true;
+	public boolean encryptData = false;
 	public List<?> channelList = new ArrayList<>();
 	public byte[] preauthIntegrityHashValue;
 	public byte[] fullSessionKey = null;
 	public byte[] signingKey = null;
 	public byte[] applicationKey = null;
+	public byte[] encryptionKey = null;
+	public byte[] decryptionKey = null;
 
 	/**
 	 * Creates a new session and registers it with the given connection.
