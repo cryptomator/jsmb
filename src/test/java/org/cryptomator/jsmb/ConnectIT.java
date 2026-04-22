@@ -22,7 +22,7 @@ public class ConnectIT {
 
 	@BeforeEach
 	public void setup() throws IOException {
-		server = TcpServer.start(4445);
+		server = TcpServer.start(0);
 		SmbConfig config = SmbConfig.builder()
 				.withMultiProtocolNegotiate(true) //
 				.withEncryptData(true) //
