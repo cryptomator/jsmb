@@ -89,4 +89,35 @@ class MessageEncryptorTest {
 		byte[] truncated = Arrays.copyOf(wire, wire.length - 1);
 		Assertions.assertThrows(IllegalArgumentException.class, () -> encryptor.decrypt(MemorySegment.ofArray(truncated), key));
 	}
+
+	/**
+	 * AES-128-GCM WRITE request test vector from the Microsoft OpenSpecifications blog
+	 * <a href="https://learn.microsoft.com/en-us/archive/blogs/openspecification/smb-3-1-1-encryption-in-windows-10">
+	 * "SMB 3.1.1 Encryption in Windows 10"</a>, Appendix A.1.
+	 */
+	@Test
+	public void testMsSmb2Aes128GcmWriteVector() throws AEADBadTagException {
+		var hex = HexFormat.of();
+		byte[] encryptionKey = hex.parseHex("A2F5E80E5D59103034F32E52F698E5EC");
+		byte[] nonce = hex.parseHex("C7D6822D269CAF48904C664C");
+		long sessionId = 0x0000100000000025L;
+		byte[] plaintext = hex.parseHex("""
+						FE534D4240000100000000000900010008000000000000000500000000000000FFFE000001000000\
+						25000000001000000000000000000000000000000000000031007000170000000000000000000000\
+						0600000004000000010000000400000000000000000000007000000000000000536D623320656E63\
+						72797074696F6E2074657374696E67\
+						""");
+		byte[] expectedTransformed = hex.parseHex("""
+						FD534D42BD73D97D2BC9001BCAFAC0FDFF5FEEBCC7D6822D269CAF48904C664C0000000087000000\
+						0000010025000000001000006ECDD2A7AFC7B47763057A041B8FD4DAFFE990B70C9E09D36C084E02\
+						D14EF247F8BDE38ACF6256F8B1D3B56F77FBDEB312FEA5E92CBCC1ED8FB2EBBFAA75E49A4A394BB4\
+						4576545567C24D4C014D47C9FBDFDAFD2C4F9B72F8D256452620A299F48E29E53D6B61D1C13A19E9\
+						1AF013F00D17E3ABC2FC3D36C8C1B6B93973253852DBD442E46EE8\
+						""");
+
+		byte[] wire = new MessageEncryptor().encrypt(plaintext, encryptionKey, sessionId, nonce);
+
+		Assertions.assertArrayEquals(expectedTransformed, wire);
+		Assertions.assertArrayEquals(plaintext, new MessageEncryptor().decrypt(MemorySegment.ofArray(wire), encryptionKey));
+	}
 }

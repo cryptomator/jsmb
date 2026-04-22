@@ -29,6 +29,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
 
@@ -79,9 +80,15 @@ public record Negotiator(TcpServer server, Connection connection) {
 		// SMB2_ENCRYPTION_CAPABILITIES
 		var requestedEncryptionCapabilities = request.negotiateContext(EncryptionCapabilities.class);
 		if (requestedEncryptionCapabilities != null) {
-			connection.cipherId = UInt16.stream(requestedEncryptionCapabilities.ciphers()).anyMatch(c -> c == EncryptionCapabilities.AES_256_GCM)
-					? EncryptionCapabilities.AES_256_GCM
-					: EncryptionCapabilities.NO_COMMON_CIPHER;
+			var offered = UInt16.toSet(requestedEncryptionCapabilities.ciphers());
+			// prefer AES-256-GCM, fall back to AES-128-GCM (the AEAD ciphers we know we can encrypt/decrypt with the JDK)
+			if (offered.contains(EncryptionCapabilities.AES_256_GCM)) {
+				connection.cipherId = EncryptionCapabilities.AES_256_GCM;
+			} else if (offered.contains(EncryptionCapabilities.AES_128_GCM)) {
+				connection.cipherId = EncryptionCapabilities.AES_128_GCM;
+			} else {
+				connection.cipherId = EncryptionCapabilities.NO_COMMON_CIPHER;
+			}
 		}
 
 		// SMB2_COMPRESSION_CAPABILITIES TODO
@@ -270,7 +277,18 @@ public record Negotiator(TcpServer server, Connection connection) {
 					session.fullSessionKey = session.sessionKey;
 					session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
 					session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
-					var response = new SessionSetupResponse(header.build()).withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
+					int cipherKeyLength = switch (connection.cipherId) {
+						case EncryptionCapabilities.AES_256_CCM, EncryptionCapabilities.AES_256_GCM -> 32;
+						default -> 16;
+					};
+					session.encryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBS2CCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
+					session.decryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBC2SCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
+					session.encryptData = connection.global.encryptData && connection.cipherId != EncryptionCapabilities.NO_COMMON_CIPHER; // step 10
+					var response = new SessionSetupResponse(header.build());
+					if (session.encryptData) {
+						response.sessionFlags(SessionSetupResponse.SMB2_SESSION_FLAG_ENCRYPT_DATA);
+					}
+					response = response.withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
 					assert Objects.equals(connection.dialect, "3.1.1");
 					return response.sign(session.signingKey, connection); // step 12
 				}

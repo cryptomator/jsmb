@@ -2,10 +2,10 @@ package org.cryptomator.jsmb;
 
 import org.cryptomator.jsmb.common.MalformedMessageException;
 import org.cryptomator.jsmb.common.NTStatus;
-import org.cryptomator.jsmb.common.SMBMessage;
 import org.cryptomator.jsmb.smb1.SMB1MessageParser;
 import org.cryptomator.jsmb.smb1.SMB1Negotiator;
 import org.cryptomator.jsmb.smb1.SmbComNegotiateRequest;
+import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.LogoffRequest;
 import org.cryptomator.jsmb.smb2.NegotiateRequest;
@@ -16,11 +16,16 @@ import org.cryptomator.jsmb.smb2.SMB2MessageParser;
 import org.cryptomator.jsmb.smb2.Session;
 import org.cryptomator.jsmb.smb2.SessionSetupRequest;
 import org.cryptomator.jsmb.smb2.SessionSetupResponse;
+import org.cryptomator.jsmb.smb2.crypto.MessageEncryptor;
+import org.cryptomator.jsmb.smb2.crypto.TransformHeader;
+import org.cryptomator.jsmb.smb2.ioctl.IoctlHandler;
+import org.cryptomator.jsmb.smb2.ioctl.IoctlRequest;
 import org.cryptomator.jsmb.util.Layouts;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.crypto.AEADBadTagException;
 import java.io.EOFException;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -39,6 +44,8 @@ class TcpConnection implements Runnable {
 	private final Connection connection;
 	private final Negotiator negotiator;
 	private final Runtime runtime;
+	private final IoctlHandler ioctlHandler;
+	private final MessageEncryptor encryptor = new MessageEncryptor();
 
 	public TcpConnection(TcpServer server, Socket socket) {
 		this.server = server;
@@ -46,6 +53,7 @@ class TcpConnection implements Runnable {
 		this.connection = new Connection(server.global);
 		this.negotiator = new Negotiator(server, connection);
 		this.runtime = new Runtime(connection);
+		this.ioctlHandler = new IoctlHandler(connection);
 	}
 
 	@Override
@@ -68,9 +76,15 @@ class TcpConnection implements Runnable {
 				if (in.readNBytes(message, 0, messageSize) != messageSize) {
 					throw new EOFException();
 				}
-				var messageSegment = MemorySegment.ofArray(message).asReadOnly();
+				MemorySegment messageSegment = MemorySegment.ofArray(message);
 
-				// 3. determine protocol and handle message:
+				// 3. if encrypted (SMB2 TRANSFORM_HEADER), decrypt into plaintext:
+				if (isTransformHeader(messageSegment)) {
+					messageSegment = decryptTransform(messageSegment);
+				}
+				messageSegment = messageSegment.asReadOnly();
+
+				// 4. determine protocol and handle message:
 				if (SMB1MessageParser.isSmb1(messageSegment)) {
 					handleSmb1Packet(messageSegment);
 				} else if (SMB2MessageParser.isSmb2(messageSegment)) {
@@ -81,9 +95,26 @@ class TcpConnection implements Runnable {
 			}
 		} catch (EOFException e) {
 			LOG.debug("Connection closed");
-		} catch (MalformedMessageException | IOException e) {
+		} catch (MalformedMessageException | IOException | AEADBadTagException e) {
 			LOG.error("Exception while reading packet", e);
 		}
+	}
+
+	private static boolean isTransformHeader(MemorySegment segment) {
+		if (segment.byteSize() < TransformHeader.STRUCTURE_SIZE) {
+			return false;
+		}
+		return segment.get(Layouts.LE_INT32, 0) == TransformHeader.PROTOCOL_ID;
+	}
+
+	private MemorySegment decryptTransform(MemorySegment segment) throws MalformedMessageException, AEADBadTagException {
+		var header = new TransformHeader(segment.asSlice(0, TransformHeader.STRUCTURE_SIZE));
+		var session = connection.sessionTable.get(header.sessionId());
+		if (session == null) {
+			throw new MalformedMessageException("Encrypted request for unknown session " + header.sessionId());
+		}
+		byte[] plaintext = encryptor.decrypt(segment, session.decryptionKey);
+		return MemorySegment.ofArray(plaintext);
 	}
 
 	private void handleSmb1Packet(MemorySegment segment) throws MalformedMessageException {
@@ -92,7 +123,7 @@ class TcpConnection implements Runnable {
 			case SmbComNegotiateRequest request -> new SMB1Negotiator(server, connection).negotiate(request);
 			default -> throw new MalformedMessageException("Command not implemented: " + msg.command());
 		};
-		writeResponse(response);
+		writeWire(response.serialize());
 	}
 
 	private void handleSmb2Packet(MemorySegment segment) throws MalformedMessageException {
@@ -103,16 +134,31 @@ class TcpConnection implements Runnable {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
 				case LogoffRequest request -> runtime.logoff(request);
+				case IoctlRequest request -> ioctlHandler.handle(request);
 				default -> throw new MalformedMessageException("Command not implemented: " + msg.header().command());
 			};
-			writeResponse(sign(msg, response));
+			var signed = sign(msg, response);
+			writeWire(maybeEncrypt(signed));
 			nextCommand = msg.header().nextCommand();
 		} while (nextCommand != 0);
 	}
 
-	private void writeResponse(SMBMessage response) {
+	private byte[] maybeEncrypt(SMB2Message response) {
+		byte[] plain = response.serialize();
+		var command = Command.valueOf(response.header().command());
+		// NEGOTIATE and SESSION_SETUP responses are never encrypted, per MS-SMB2 3.3.4.1.4
+		if (command == Command.NEGOATIATE || command == Command.SESSION_SETUP) {
+			return plain;
+		}
+		var session = connection.sessionTable.get(response.header().sessionId());
+		if (session == null || !session.encryptData) {
+			return plain;
+		}
+		return encryptor.encrypt(plain, session.encryptionKey, session.sessionId);
+	}
+
+	private void writeWire(byte[] bytes) {
 		try {
-			var bytes = response.serialize();
 			var out = socket.getOutputStream();
 			byte[] transportHeader = new byte[4];
 			var transportHeaderSegment = MemorySegment.ofArray(transportHeader);
@@ -125,7 +171,7 @@ class TcpConnection implements Runnable {
 		}
 	}
 
-	private SMBMessage sign(SMB2Message request, SMB2Message response) {
+	private SMB2Message sign(SMB2Message request, SMB2Message response) {
 		var sessionId = response.header().sessionId();
 		var session = connection.sessionTable.get(sessionId);
 		assert (sessionId == 0) == (session == null);

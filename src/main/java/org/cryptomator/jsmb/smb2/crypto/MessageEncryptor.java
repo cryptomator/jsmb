@@ -34,7 +34,14 @@ public class MessageEncryptor {
 	private final SecureRandom secureRandom;
 
 	public MessageEncryptor() {
-		this(new SecureRandom());
+		SecureRandom secureRandom;
+		try {
+			secureRandom = SecureRandom.getInstanceStrong();
+		} catch (NoSuchAlgorithmException e) {
+			throw new AssertionError("Every implementation of the Java platform is required to support at least one strong SecureRandom implementation.", e);
+		}
+		this(secureRandom);
+
 	}
 
 	@VisibleForTesting
