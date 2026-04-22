@@ -79,7 +79,8 @@ class TcpConnection implements Runnable {
 				MemorySegment messageSegment = MemorySegment.ofArray(message);
 
 				// 3. if encrypted (SMB2 TRANSFORM_HEADER), decrypt into plaintext:
-				if (isTransformHeader(messageSegment)) {
+				boolean requestEncrypted = isTransformHeader(messageSegment);
+				if (requestEncrypted) {
 					messageSegment = decryptTransform(messageSegment);
 				}
 				messageSegment = messageSegment.asReadOnly();
@@ -88,7 +89,7 @@ class TcpConnection implements Runnable {
 				if (SMB1MessageParser.isSmb1(messageSegment)) {
 					handleSmb1Packet(messageSegment);
 				} else if (SMB2MessageParser.isSmb2(messageSegment)) {
-					handleSmb2Packet(messageSegment);
+					handleSmb2Packet(messageSegment, requestEncrypted);
 				} else {
 					throw new MalformedMessageException("Unknown protocol");
 				}
@@ -126,7 +127,7 @@ class TcpConnection implements Runnable {
 		writeWire(response.serialize());
 	}
 
-	private void handleSmb2Packet(MemorySegment segment) throws MalformedMessageException {
+	private void handleSmb2Packet(MemorySegment segment, boolean requestEncrypted) throws MalformedMessageException {
 		int nextCommand = 0;
 		do {
 			var msg = SMB2MessageParser.parse(segment.asSlice(nextCommand));
@@ -138,12 +139,19 @@ class TcpConnection implements Runnable {
 				default -> throw new MalformedMessageException("Command not implemented: " + msg.header().command());
 			};
 			var signed = sign(msg, response);
-			writeWire(maybeEncrypt(signed));
+			writeWire(maybeEncrypt(signed, requestEncrypted));
 			nextCommand = msg.header().nextCommand();
 		} while (nextCommand != 0);
 	}
 
-	private byte[] maybeEncrypt(SMB2Message response) {
+	/**
+	 * Encrypts {@code response} iff any of MS-SMB2 3.3.4.1.4's clauses apply:
+	 * <ul>
+	 *   <li>the request was itself encrypted (even if {@code Session.EncryptData} is false), or</li>
+	 *   <li>{@code Session.EncryptData} is true (and the command is not {@code NEGOTIATE} or {@code SESSION_SETUP}).</li>
+	 * </ul>
+	 */
+	private byte[] maybeEncrypt(SMB2Message response, boolean requestEncrypted) {
 		byte[] plain = response.serialize();
 		var command = Command.valueOf(response.header().command());
 		// NEGOTIATE and SESSION_SETUP responses are never encrypted, per MS-SMB2 3.3.4.1.4
@@ -151,7 +159,14 @@ class TcpConnection implements Runnable {
 			return plain;
 		}
 		var session = connection.sessionTable.get(response.header().sessionId());
-		if (session == null || !session.encryptData) {
+		if (session == null || session.encryptionKey == null) {
+			// no session keys available — can't encrypt even if we wanted to
+			return plain;
+		}
+		if (requestEncrypted) {
+			return encryptor.encrypt(plain, session.encryptionKey, session.sessionId);
+		}
+		if (!session.encryptData) {
 			return plain;
 		}
 		return encryptor.encrypt(plain, session.encryptionKey, session.sessionId);

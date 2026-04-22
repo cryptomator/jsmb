@@ -21,9 +21,9 @@ public class RunIT {
 	@Disabled("run manually for interactive client testing")
 	@DisplayName("Run TcpServer on port 4445 and block on stdin")
 	public void test() {
-		try (var server = TcpServer.start(4445)){
-			LOG.info("Ready to accept connections...");
-			System.in.read();
+		try (var server = TcpServer.start(4445, Config.create(Config.DEBUG_ENCRYPTION))){
+			LOG.info("Ready to accept connections on localhost:{}...", server.getLocalPort());
+			IO.readln();
 		} catch (IOException e) {
 			LOG.error("Server error", e);
 		}

@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -176,18 +177,16 @@ public record Negotiator(TcpServer server, Connection connection) {
 
 	public SMB2Message sessionSetup(SessionSetupRequest request) {
 		var global = connection.global;
-		assert global.encryptData;
-		assert global.rejectUnencryptedAccess;
 		assert connection.dialect != null;
 
-		//connection.dialect should only be "3.1.1"
+		// connection.dialect should only be "3.1.1" at this point, but the spec's steps 1 and 2 only apply to dialects "3.0" and "3.0.2" — so check the flag and fail if it's set but the dialect is 3.1.x.
 		var dialect3x = connection.dialect.startsWith("3.");
-		if (/* assertions && */ !dialect3x) { //Step 1
+		if (global.encryptData && global.rejectUnencryptedAccess && !dialect3x) { //Step 1
 			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
 
 		assert dialect3x;
-		if (/* assertions && dialect3x && */ (connection.clientCapabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0) { //Step 2
+		if (global.rejectUnencryptedAccess && (connection.clientCapabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0) { //Step 2
 			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
 		final Session session;
@@ -284,6 +283,9 @@ public record Negotiator(TcpServer server, Connection connection) {
 					session.encryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBS2CCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
 					session.decryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBC2SCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
 					session.encryptData = connection.global.encryptData && connection.cipherId != EncryptionCapabilities.NO_COMMON_CIPHER; // step 10
+					if (connection.global.debugEncryption) {
+						logSessionKeys(session);
+					}
 					var response = new SessionSetupResponse(header.build());
 					if (session.encryptData) {
 						response.sessionFlags(SessionSetupResponse.SMB2_SESSION_FLAG_ENCRYPT_DATA);
@@ -312,6 +314,47 @@ public record Negotiator(TcpServer server, Connection connection) {
 			// Every implementation of the Java platform is required to support at least one strong SecureRandom implementation.
 			throw new IllegalStateException("No strong SecureRandom available", e);
 		}
+	}
+
+	/**
+	 * Emits the session id and derived key material at {@code INFO} so packet captures can be
+	 * decrypted in Wireshark (<em>Preferences → Protocols → SMB2 → Decryption keys</em>). Only
+	 * invoked when the server was started with {@code Config.DEBUG_ENCRYPTION} in its flag set — otherwise keys never
+	 * touch the log.
+	 * <p>
+	 * Wireshark accepts lines of the form
+	 * {@code <SessionId>,<SessionKey>,<ServerInKey>,<ServerOutKey>}
+	 * where {@code ServerInKey} is the server's decryption key (C2S) and {@code ServerOutKey} is its
+	 * encryption key (S2C) — all hex, no {@code 0x} prefix. The session id must be in
+	 * <strong>little-endian</strong> wire order (it's parsed as a byte sequence, not a number); the
+	 * human-readable summary line keeps the big-endian rendering that Wireshark's packet-details
+	 * view shows for the same field.
+	 *
+	 * @implNote This method logs secret key material. Gate the call on {@code Global.debugEncryption}.
+	 */
+	private static void logSessionKeys(Session session) {
+		if (!LOG.isInfoEnabled()) return;
+		var hex = HexFormat.of();
+		var sessionIdBigEndian = String.format("%016x", session.sessionId);
+		var sessionIdLittleEndian = String.format("%016x", Long.reverseBytes(session.sessionId));
+		LOG.info("""
+				SMB2 session 0x{} established — derived keys (paste the Wireshark line into Preferences → Protocols → SMB2 → Decryption keys):
+				  SessionKey     = {}
+				  SigningKey     = {}
+				  EncryptionKey  = {}  (S2C, server→client)
+				  DecryptionKey  = {}  (C2S, client→server)
+				  ApplicationKey = {}
+				  Wireshark line: {},{},{},{}""",
+				sessionIdBigEndian,
+				hex.formatHex(session.sessionKey),
+				hex.formatHex(session.signingKey),
+				hex.formatHex(session.encryptionKey),
+				hex.formatHex(session.decryptionKey),
+				hex.formatHex(session.applicationKey),
+				sessionIdLittleEndian,
+				hex.formatHex(session.sessionKey),
+				hex.formatHex(session.decryptionKey),
+				hex.formatHex(session.encryptionKey));
 	}
 
 }
