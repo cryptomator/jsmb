@@ -27,6 +27,52 @@ try (var server = TcpServer.start(4445)) {
 A minimal reference implementation over `java.nio.file.Path` lives in `src/test/java/org/cryptomator/jsmb/share/nio/NioShare.java`.
 It is **test-only** and intentionally happy-path — production-grade backends are out of scope for this library.
 
+## Architecture
+
+### Request flow
+
+1. `TcpServer` (entry point) accepts TCP connections and dispatches each to a **virtual thread** running `TcpConnection`.
+2. `TcpConnection.run()` reads the 4-byte big-endian NetBIOS transport header (length), reads the message payload, and dispatches on the protocol ID:
+   - If the bytes start with an SMB2 `TRANSFORM_HEADER` (`0xFD 'SMB'`), the payload is decrypted in place using the session's decryption key before dispatch.
+   - `SMB1MessageParser.isSmb1` / `SMB2MessageParser.isSmb2` then discriminate the plaintext.
+   - SMB1 only handles `SmbComNegotiateRequest` (multi-protocol negotiate → upgrade to SMB2) via `SMB1Negotiator`.
+   - SMB2 loops over chained (`nextCommand`) commands, dispatched via a pattern-match switch to `Negotiator`, `Runtime`, `TreeConnectHandler`, `CreateHandler`, `IoctlHandler`, or — for not-yet-implemented commands — an `UnhandledRequest` that gets a `STATUS_NOT_SUPPORTED` reply (keeps the connection alive so clients can probe optional commands without a TCP reset).
+3. Each response passes through `TcpConnection.sign(...)` (MS-SMB2 3.3.4.1.5 signing decision tree) and then `TcpConnection.maybeEncrypt(...)` (MS-SMB2 3.3.4.1.4 encryption decision — which also **mirrors the request's encryption state**, so a client-encrypted request gets an encrypted response even when `Session.EncryptData` is false).
+
+### State hierarchy
+
+Three layers of state mirror MS-SMB2's "Per …" sections:
+
+- `smb2.Global` — server-wide. Holds the session table, the registered shares map (case-insensitive), and the behavioural toggles derived from `Config` (`encryptData`, `rejectUnencryptedAccess`, `requireMessageSigning`, `debugEncryption`). One instance per `TcpServer`.
+- `smb2.Connection` — per TCP connection. Holds negotiated dialect, client/server capabilities, cipher ID, signing algorithm, preauth integrity hash chain, and its own `sessionTable`.
+- `smb2.Session` — per authenticated SMB session. Holds `sessionKey` and the five keys derived from it via `NistSP800108KDF` (`signingKey`, `applicationKey`, `encryptionKey`, `decryptionKey`), NTLM session state, the preauth integrity hash snapshot, `openTable: Map<FileId, Open>`, `treeConnectTable: Map<Integer, TreeConnect>`, and a per-session `nextTreeId` allocator.
+
+### Packet parsing via `MemorySegment`
+
+SMB2 messages are **not** deserialised into POJOs. Records like `PacketHeader`, `NegotiateRequest`, `TreeConnectResponse`, `CreateResponse` wrap a `java.lang.foreign.MemorySegment` and expose typed accessors that read/write the backing bytes directly using `ValueLayout` constants from `util.Layouts` (`LE_UINT16`, `LE_INT32`, `LE_INT64`, `BE_INT32`, `BE_INT64`). Little-endian is SMB-on-the-wire; big-endian is only the NetBIOS transport header. Builders (e.g. `PacketHeaderBuilder`) assemble outgoing messages; `copy()` on a header returns a builder preloaded with existing fields for immutable-style modification.
+
+### Backend SPI (`org.cryptomator.jsmb.share`)
+
+Embedders plug a filesystem-like backend in via the `SmbShare` / `SmbOpen` interfaces, with value records `FileBasicInfo`, `FileStandardInfo`, `DirEntry`, `FsAttributes`, `FsSize`, and `OpenParams` (with a `Disposition` enum that mirrors MS-SMB2 2.2.13's `CreateDisposition`). The SPI talks about paths, bytes, and basic metadata only — it doesn't leak SMB concepts. SMB2 command handlers translate NT access masks / share modes / dispositions / options into SPI calls and map `java.nio.file` exceptions (`NoSuchFileException`, `FileAlreadyExistsException`, `AccessDeniedException`, generic `IOException`) to the appropriate `STATUS_*` codes.
+
+### Negotiate contexts
+
+`smb2.negotiate.*` holds the SMB 3.1.1 negotiate contexts (preauth integrity, encryption, compression, signing, RDMA, transport). `NegotiateRequest.negotiateContext(Class)` looks up a context by type; the server responds with matching contexts only if the client included them.
+
+### Authentication (SPNEGO + NTLMv2)
+
+- The GSS token in `SESSION_SETUP` is SPNEGO, parsed/built in the `asn1` package (`NegTokenInit2`, `NegTokenResp`, hand-rolled `ASN1Node` encoder/decoder).
+- Only NTLM is offered (`NegTokenInit2.createNtlmOnly()`); Kerberos is not implemented.
+- `ntlmv2.NtlmSession` is a sealed state machine: `Initial` → `AwaitingAuthentication` → `Authenticated`, advanced by `Negotiator.gssAuthenticate`.
+- **Credentials are currently hardcoded** in `Negotiator.gssAuthenticate` as `user / password / DOMAIN` — see the `FIXME` there.
+- `ntlmv2.LegacyCryptoProvider` is a custom `java.security.Provider` registered to provide MD4 (removed from modern JDKs but still required by NTLMv2). The module's `exports org.cryptomator.jsmb.ntlmv2 to java.base` lets `java.security` load `MD4` reflectively.
+
+### Signing and encryption
+
+- `smb2.crypto.MessageSigner` implements AES-CMAC and AES-GMAC signatures for dialect 3.1.1. The CMAC path currently uses BouncyCastle's `CMac` — this is **temporary**; see the `TODO` in `pom.xml` / `module-info.java` referencing [issue #4](https://github.com/cryptomator/jsmb/issues/4). GMAC uses the JDK's `AES/GCM/NoPadding` and extracts the authentication tag from an empty-plaintext encryption over the header+body as AAD.
+- `smb2.crypto.MessageEncryptor` wraps SMB2 messages in an `SMB2 TRANSFORM_HEADER` via AES-GCM. The server advertises AES-256-GCM first and falls back to AES-128-GCM when the client only supports the latter (e.g. `smbj` 0.14). Session keys are derived from the session key via `NistSP800108KDF` with the MS-SMB2-specified labels (`SMBS2CCipherKey\0` for server→client, `SMBC2SCipherKey\0` for client→server).
+- `TcpConnection.shouldSign` / `selectKey` / `maybeEncrypt` encode the MS-SMB2 decision trees. The current implementation deliberately simplifies: `Channel` is not modelled, so `channelSigningKey` always returns `Session.signingKey`. If channel binding (`SessionSetupRequest.FLAG_BINDING`) is added, revisit both `Negotiator.gssAuthenticate` and `channelSigningKey`.
+
 ## Debugging
 
 ### Wireshark packet captures
