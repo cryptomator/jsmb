@@ -10,9 +10,20 @@ import java.lang.foreign.MemorySegment;
  */
 public record ErrorResponse(PacketHeader header, MemorySegment segment) implements SMB2Message {
 
+	/**
+	 * Per MS-SMB2 2.2.2 the {@code StructureSize} value is 9 ({@code FixedPortionSize=8 + 1}). The
+	 * wire body is 8 bytes of fixed portion plus at least 1 byte of {@code ErrorData}; when
+	 * {@code ByteCount} is zero the {@code ErrorData} byte MUST still be present (one zero byte).
+	 */
 	public static final char STRUCTURE_SIZE = 9;
 
+	public ErrorResponse {
+		// StructureSize: According to spec, "The server MUST set this field to 9"
+		segment.set(Layouts.LE_UINT16, 0, STRUCTURE_SIZE);
+	}
+
 	private ErrorResponse(PacketHeader header) {
+		// 8-byte fixed portion + 1-byte ErrorData stub (= 9 bytes) — ErrorContextCount and ByteCount stay 0.
 		this(header, MemorySegment.ofArray(new byte[STRUCTURE_SIZE]));
 		// ErrorData not supported yet, setting to 0
 		errorContextCount((byte) 0);
