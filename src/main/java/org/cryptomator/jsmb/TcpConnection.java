@@ -2,6 +2,7 @@ package org.cryptomator.jsmb;
 
 import org.cryptomator.jsmb.common.MalformedMessageException;
 import org.cryptomator.jsmb.common.NTStatus;
+import org.cryptomator.jsmb.smb2.ErrorResponse;
 import org.cryptomator.jsmb.smb1.SMB1MessageParser;
 import org.cryptomator.jsmb.smb1.SMB1Negotiator;
 import org.cryptomator.jsmb.smb1.SmbComNegotiateRequest;
@@ -16,10 +17,14 @@ import org.cryptomator.jsmb.smb2.SMB2MessageParser;
 import org.cryptomator.jsmb.smb2.Session;
 import org.cryptomator.jsmb.smb2.SessionSetupRequest;
 import org.cryptomator.jsmb.smb2.SessionSetupResponse;
+import org.cryptomator.jsmb.smb2.UnhandledRequest;
 import org.cryptomator.jsmb.smb2.crypto.MessageEncryptor;
 import org.cryptomator.jsmb.smb2.crypto.TransformHeader;
 import org.cryptomator.jsmb.smb2.ioctl.IoctlHandler;
 import org.cryptomator.jsmb.smb2.ioctl.IoctlRequest;
+import org.cryptomator.jsmb.smb2.tree.TreeConnectHandler;
+import org.cryptomator.jsmb.smb2.tree.TreeConnectRequest;
+import org.cryptomator.jsmb.smb2.tree.TreeDisconnectRequest;
 import org.cryptomator.jsmb.util.Layouts;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -45,6 +50,7 @@ class TcpConnection implements Runnable {
 	private final Negotiator negotiator;
 	private final Runtime runtime;
 	private final IoctlHandler ioctlHandler;
+	private final TreeConnectHandler treeConnectHandler;
 	private final MessageEncryptor encryptor = new MessageEncryptor();
 
 	public TcpConnection(TcpServer server, Socket socket) {
@@ -54,6 +60,7 @@ class TcpConnection implements Runnable {
 		this.negotiator = new Negotiator(server, connection);
 		this.runtime = new Runtime(connection);
 		this.ioctlHandler = new IoctlHandler(connection);
+		this.treeConnectHandler = new TreeConnectHandler(connection);
 	}
 
 	@Override
@@ -136,7 +143,13 @@ class TcpConnection implements Runnable {
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
 				case LogoffRequest request -> runtime.logoff(request);
 				case IoctlRequest request -> ioctlHandler.handle(request);
-				default -> throw new MalformedMessageException("Command not implemented: " + msg.header().command());
+				case TreeConnectRequest request -> treeConnectHandler.connect(request);
+				case TreeDisconnectRequest request -> treeConnectHandler.disconnect(request);
+				case UnhandledRequest request -> {
+					LOG.debug("Command 0x{} not implemented, replying STATUS_NOT_SUPPORTED", Integer.toHexString(request.header().command()));
+					yield ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
+				}
+				default -> throw new MalformedMessageException("Unexpected SMB2 message type: " + msg.getClass().getSimpleName());
 			};
 			var signed = sign(msg, response);
 			writeWire(maybeEncrypt(signed, requestEncrypted));

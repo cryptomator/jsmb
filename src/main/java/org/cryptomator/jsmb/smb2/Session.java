@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -48,6 +49,8 @@ public class Session {
 	public boolean signingRequired = false;
 	public Map<FileId, Open> openTable = new HashMap<>();
 	public Map<Integer, TreeConnect> treeConnectTable = new HashMap<>();
+	/** Generator for per-session {@code TreeId}s. MS-SMB2 requires uniqueness within a session; 0 and 0xFFFFFFFF are reserved. */
+	public final AtomicInteger nextTreeId = new AtomicInteger(1);
 	public boolean isAnonymous = false;
 	public Instant creationTime = Instant.now();
 	public Instant idleTime = Instant.now();
