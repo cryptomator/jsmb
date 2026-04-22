@@ -1,0 +1,8 @@
+# Creates a small directory tree.
+# Exercises CREATE (with FILE_DIRECTORY_FILE + FILE_CREATE) and CLOSE.
+# Requires milestones: M4 (TREE_CONNECT), M5 (CREATE / CLOSE).
+# Expected: both mkdir calls succeed (no NT_STATUS_* error from smbclient), and the jSMB @TempDir
+# root ends up with `scripted/nested/` present.
+mkdir scripted
+mkdir scripted\nested
+exit

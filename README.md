@@ -24,32 +24,24 @@ try (var server = TcpServer.start(4445)) {
 }
 ```
 
-A minimal reference implementation over `java.nio.file.Path` lives in
-`src/test/java/org/cryptomator/jsmb/share/nio/NioShare.java`. It is **test-only**
-and intentionally happy-path — production-grade backends are out of scope
-for this library.
+A minimal reference implementation over `java.nio.file.Path` lives in `src/test/java/org/cryptomator/jsmb/share/nio/NioShare.java`.
+It is **test-only** and intentionally happy-path — production-grade backends are out of scope for this library.
 
 ## Debugging
 
 ### Wireshark packet captures
 
-jSMB listens on a configurable TCP port (e.g. `4445`). Because Wireshark's
-NBSS/SMB dissector is bound to TCP port **445** by default, traffic on any
-other port is displayed as raw TCP until you tell Wireshark about the port:
+jSMB listens on a configurable TCP port (e.g. `4445`).
+Because Wireshark's NBSS/SMB dissector is bound to TCP port **445** by default, traffic on any other port is displayed as raw TCP until you tell Wireshark about the port:
 
-1. Start a capture on the relevant interface (usually `loopback` / `lo0` for
-   local testing).
-2. Open **Edit → Preferences → Protocols → NBSS** and add jSMB's port to the
-   **TCP Ports** field (comma-separated, e.g. `445,4445`). Click **OK**.
+1. Start a capture on the relevant interface (usually `loopback` / `lo0` for local testing).
+2. Open **Edit → Preferences → Protocols → NBSS** and add jSMB's port to the **TCP Ports** field (comma-separated, e.g. `445,4445`). Click **OK**.
 3. Past and future packets on that port now dissect as NBSS → SMB / SMB2.
-4. Apply the display filter **`smb || smb2`** to hide TCP noise and surface
-   just the protocol exchange.
+4. Apply the display filter **`smb || smb2`** to hide TCP noise and surface just the protocol exchange.
 
 ### Decrypting encrypted sessions
 
-Start the server with `Config.DEBUG_ENCRYPTION` in the flag set — omitted
-by default, so key material never touches the log unless you explicitly
-opt in:
+Start the server with `Config.DEBUG_ENCRYPTION` in the flag set — omitted by default, so key material never touches the log unless you explicitly opt in:
 
 ```java
 import org.cryptomator.jsmb.Config;
@@ -62,8 +54,7 @@ var flags = Config.create(
 try (var server = TcpServer.start(4445, flags)) { … }
 ```
 
-On every successful `SESSION_SETUP`, jSMB then logs the session id and
-derived key material at `INFO`:
+On every successful `SESSION_SETUP`, jSMB then logs the session id and derived key material at `INFO`:
 
 ```
 INFO org.cryptomator.jsmb.smb2.Negotiator - SMB2 session 0x0000000000000002 established — derived keys (paste the Wireshark line into Preferences → Protocols → SMB2 → Decryption keys):
@@ -75,26 +66,18 @@ INFO org.cryptomator.jsmb.smb2.Negotiator - SMB2 session 0x0000000000000002 esta
   Wireshark line: 0200000000000000,7a9cc2bc…,048ddf1d…,61b942fe…
 ```
 
-Paste the **`Wireshark line`** value into **Edit → Preferences → Protocols →
-SMB2 → Decryption keys**. Wireshark will transparently decrypt the captured
-`TRANSFORM_HEADER` packets and dissect them as their plaintext SMB2
-equivalents. The line's four fields are
-`SessionId, SessionKey, ServerInKey, ServerOutKey`, where `ServerInKey` is
-the key the server uses to *decrypt* client-to-server traffic and
-`ServerOutKey` is the key it uses to *encrypt* server-to-client responses.
-The session id here is in **little-endian** wire order — that's what the
-Wireshark preference parses byte-for-byte; the human-readable summary line
-just above uses the big-endian rendering that Wireshark's packet-details
-view shows for the same field.
+Paste the **`Wireshark line`** value into **Edit → Preferences → Protocols → SMB2 → Decryption keys**.
+Wireshark will transparently decrypt the captured `TRANSFORM_HEADER` packets and dissect them as their plaintext SMB2 equivalents.
+The line's four fields are `SessionId, SessionKey, ServerInKey, ServerOutKey`:
+`ServerInKey` is the key the server uses to *decrypt* client-to-server traffic, `ServerOutKey` the key it uses to *encrypt* server-to-client responses.
+The session id here is in **little-endian** wire order — that's what the Wireshark preference parses byte-for-byte.
+The human-readable summary line just above uses the big-endian rendering that Wireshark's packet-details view shows for the same field.
 
-> ⚠️ `Config.DEBUG_ENCRYPTION` leaks secret key material to the log by design.
-> Only enable it in deployments you control, while actively analysing
-> captures — never ship it to production.
+> ⚠️ `Config.DEBUG_ENCRYPTION` leaks secret key material to the log by design. Only enable it in deployments you control, while actively analysing captures — never ship it to production.
 
 ### Capturing plaintext instead
 
-If you prefer to skip decryption entirely, start the server with a flag
-set that omits both `Config.ENCRYPT_DATA` and `Config.REJECT_UNENCRYPTED_ACCESS`:
+If you prefer to skip decryption entirely, start the server with a flag set that omits both `Config.ENCRYPT_DATA` and `Config.REJECT_UNENCRYPTED_ACCESS`:
 
 ```java
 import org.cryptomator.jsmb.Config;
@@ -104,10 +87,20 @@ try (var server = TcpServer.start(4445, Config.create(Config.REQUIRE_MESSAGE_SIG
 }
 ```
 
-Clients must also be configured to not require encryption (e.g. `smbj`
-`SmbConfig.builder().withEncryptData(false)`). Note that this disables the
-confidentiality guarantee for every connection and is only safe on a
-loopback interface during development.
+Clients must also be configured to not require encryption (e.g. `smbj` `SmbConfig.builder().withEncryptData(false)`).
+Note that this disables the confidentiality guarantee for every connection and is only safe on a loopback interface during development.
+
+### Manual interop testing with Samba's `smbclient`
+
+A separate harness for driving jSMB from Samba's reference client lives under [`interop/`](interop/). It's gated on the `samba-harness` Maven profile (plain `mvn test` and CI skip it), and ships a Podman-hosted wrapper that runs scenarios by name, from a file, or from a heredoc. See [`interop/README.md`](interop/README.md) for the full walk-through; the short form is:
+
+```bash
+# Terminal 1 — start jSMB
+mvn test -Psamba-harness
+
+# Terminal 2 — run a scenario
+./interop/run-samba-scenario.sh smoke.txt
+```
 
 ## License
 

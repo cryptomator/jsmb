@@ -11,6 +11,7 @@ import org.slf4j.simple.SimpleLogger;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
 
 public class RunIT {
 
@@ -30,10 +31,18 @@ public class RunIT {
 		try (var server = TcpServer.start(4445, Config.create(Config.DEBUG_ENCRYPTION))) {
 			server.registerShare("data", new NioShare(shareRoot));
 			LOG.info("Registered share 'data' at {}", shareRoot);
-			LOG.info("Ready to accept connections on localhost:{} (connect via \\\\localhost:{}\\data)", server.getLocalPort(), server.getLocalPort());
-			IO.readln();
+			LOG.info("Ready to accept connections on localhost:{} — Ctrl+C to stop", server.getLocalPort());
+
+			// wait for SIGTERM:
+			var stop = new CountDownLatch(1);
+			Runtime.getRuntime().addShutdownHook(new Thread(stop::countDown, "shutdown"));
+			stop.await();
+			LOG.info("Shutting down...");
 		} catch (IOException e) {
 			LOG.error("Server error", e);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			LOG.error("Thread interrupted.", e);
 		}
 	}
 }

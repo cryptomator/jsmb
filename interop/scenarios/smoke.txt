@@ -1,0 +1,4 @@
+# Minimal smoke scenario: connect, tree-connect, disconnect.
+# Exercises NEGOTIATE, SESSION_SETUP, TREE_CONNECT, TREE_DISCONNECT, LOGOFF — no file ops.
+# Expected: smbclient reaches the `smb: \>` prompt, then exits cleanly.
+exit

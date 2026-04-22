@@ -271,5 +271,30 @@
 				</repository>
 			</distributionManagement>
 		</profile>
+
+		<!--
+		Manual interop harness: starts jSMB on port 4445 and blocks on stdin so you can drive it
+		from Samba's smbclient running in a Podman container. See the "Manual interop testing with
+		Samba's smbclient" section of README.md for the podman run commands.
+
+		Enable with: mvn test -Psamba-harness
+		-->
+		<profile>
+			<id>samba-harness</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<test>SambaClientIT</test>
+							<systemPropertyVariables>
+								<samba.harness>true</samba.harness>
+							</systemPropertyVariables>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
 	</profiles>
 </project>
