@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2.crypto;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.AEADBadTagException;
@@ -11,6 +12,7 @@ import java.util.HexFormat;
 class MessageEncryptorTest {
 
 	@Test
+	@DisplayName("Encrypt then decrypt recovers the original plaintext")
 	public void testRoundTrip() throws AEADBadTagException {
 		byte[] key = HexFormat.of().parseHex("0011223344556677889900aabbccddeeff00112233445566778899aabbccddee"); // 32-byte AES-256 key
 		byte[] plaintext = "Hello, encrypted SMB2 world!".getBytes();
@@ -31,6 +33,7 @@ class MessageEncryptorTest {
 	}
 
 	@Test
+	@DisplayName("Encrypting with a fixed nonce is deterministic")
 	public void testDeterministicEncryptWithFixedNonce() throws AEADBadTagException {
 		byte[] key = new byte[32];
 		Arrays.fill(key, (byte) 0x42);
@@ -49,19 +52,21 @@ class MessageEncryptorTest {
 	}
 
 	@Test
+	@DisplayName("Decrypting a ciphertext with one flipped byte fails GCM authentication")
 	public void testTamperedCiphertextFailsAuth() {
 		byte[] key = new byte[32];
 		byte[] plaintext = "payload".getBytes();
 		var encryptor = new MessageEncryptor();
 		byte[] wire = encryptor.encrypt(plaintext, key, 0L);
 
-		// flip one byte of the ciphertext
+		// flip one bit of the ciphertext
 		wire[TransformHeader.STRUCTURE_SIZE] ^= 0x01;
 
 		Assertions.assertThrows(AEADBadTagException.class, () -> encryptor.decrypt(MemorySegment.ofArray(wire), key));
 	}
 
 	@Test
+	@DisplayName("Decrypting after tampering with the AAD (Flags field) fails GCM authentication")
 	public void testTamperedAadFailsAuth() {
 		byte[] key = new byte[32];
 		byte[] plaintext = "payload".getBytes();
@@ -75,6 +80,7 @@ class MessageEncryptorTest {
 	}
 
 	@Test
+	@DisplayName("Decrypt rejects a buffer whose ProtocolId is not 0xFD 'SMB'")
 	public void testDecryptRejectsWrongProtocolId() {
 		byte[] key = new byte[32];
 		byte[] wire = new byte[TransformHeader.STRUCTURE_SIZE];
@@ -82,6 +88,7 @@ class MessageEncryptorTest {
 	}
 
 	@Test
+	@DisplayName("Decrypt rejects a buffer whose length does not match OriginalMessageSize")
 	public void testDecryptRejectsSizeMismatch() {
 		byte[] key = new byte[32];
 		var encryptor = new MessageEncryptor();
@@ -96,6 +103,7 @@ class MessageEncryptorTest {
 	 * "SMB 3.1.1 Encryption in Windows 10"</a>, Appendix A.1.
 	 */
 	@Test
+	@DisplayName("AES-128-GCM output matches the MS-SMB2 WRITE test vector (blog Appendix A.1)")
 	public void testMsSmb2Aes128GcmWriteVector() throws AEADBadTagException {
 		var hex = HexFormat.of();
 		byte[] encryptionKey = hex.parseHex("A2F5E80E5D59103034F32E52F698E5EC");

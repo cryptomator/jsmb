@@ -8,13 +8,13 @@ import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.smb2.SessionSetupResponse;
 import org.cryptomator.jsmb.smb2.negotiate.SigningCapabilities;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.HexFormat;
 
@@ -23,6 +23,7 @@ class MessageSignerTest {
 	private final static HexFormat HEX_FORMAT = HexFormat.of();
 
 	@Test
+	@DisplayName("AES-GMAC matches the NIST CAVP test vector")
 	public void testGmacSignature() {
 		// test vector from NIST CAVP: https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program/cavp-testing-block-cipher-modes
 		/*
@@ -42,6 +43,7 @@ class MessageSignerTest {
 	}
 
 	@Test
+	@DisplayName("AES-CMAC matches the NIST SP 800-38B example vector")
 	public void testCMAC() {
 		// test vector from NIST Cryptographic Standards and Guidelines: https://csrc.nist.gov/projects/cryptographic-standards-and-guidelines/example-values (https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/AES_CMAC.pdf)
 		/*
@@ -58,6 +60,7 @@ class MessageSignerTest {
 	}
 
 	@ParameterizedTest
+	@DisplayName("Signing a SESSION_SETUP response produces the expected signed bytes for each algorithm")
 	@CsvSource(textBlock = """
 			0x00000000ef9270f6,\
 			fe534d42400001000000000001000020110000000000000002000000000000000000000000000000f67092ef0000000000000000000000000000000000000000,\

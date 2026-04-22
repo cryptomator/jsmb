@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb;
 
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +18,8 @@ public class RunIT {
 	private static final Logger LOG = LoggerFactory.getLogger(RunIT.class);
 
 	@Test
-	@Disabled
+	@Disabled("run manually for interactive client testing")
+	@DisplayName("Run TcpServer on port 4445 and block on stdin")
 	public void test() {
 		try (var server = TcpServer.start(4445)){
 			LOG.info("Ready to accept connections...");
