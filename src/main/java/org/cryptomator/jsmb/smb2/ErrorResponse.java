@@ -27,7 +27,7 @@ public record ErrorResponse(PacketHeader header, MemorySegment segment) implemen
 		segment.set(Layouts.LE_INT32, 4, byteCount);
 	}
 
-	static ErrorResponse create(SMB2Message request, int errorCode) {
+	public static ErrorResponse create(SMB2Message request, int errorCode) {
 		PacketHeader header = PacketHeader.builder() //
 				.command(request.header().command()) //
 				.messageId(request.header().messageId()) //

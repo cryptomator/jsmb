@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.common.MalformedMessageException;
+import org.cryptomator.jsmb.smb2.ioctl.IoctlRequest;
 import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
@@ -27,6 +28,7 @@ public class SMB2MessageParser {
 			case NEGOATIATE -> new NegotiateRequest(header, bodySegment);
 			case SESSION_SETUP -> new SessionSetupRequest(header, bodySegment);
 			case LOGOFF -> new LogoffRequest(header, bodySegment);
+			case IOCTL -> new IoctlRequest(header, bodySegment);
 			default -> throw new MalformedMessageException("Unknown command: " + Integer.toHexString(header.command()));
 		};
 	}

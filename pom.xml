@@ -22,7 +22,7 @@
 
 		<!-- build plugin dependencies -->
 		<dependency-check.version>9.1.0</dependency-check.version>
-		<jacoco.version>0.8.12</jacoco.version>
+		<jacoco.version>0.8.14</jacoco.version>
 		<nexus-staging.version>1.6.13</nexus-staging.version>
 	</properties>
 
@@ -166,7 +166,7 @@
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>0.8.12</version>
+				<version>${jacoco.version}</version>
 				<executions>
 					<execution>
 						<id>prepare-agent</id>
