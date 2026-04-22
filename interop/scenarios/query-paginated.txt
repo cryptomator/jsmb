@@ -1,0 +1,15 @@
+# Creates several entries then lists them, forcing at least one QUERY_DIRECTORY pagination round-trip.
+# Exercises M4 (TREE_CONNECT), M5 (CREATE / CLOSE), and M6 (QUERY_DIRECTORY with pagination).
+# Expected: all mkdir commands succeed and the `ls` output contains every dir name. The harness sets
+# a small output buffer via smbclient's -b (buffer) option so the server has to return entries across
+# multiple QUERY_DIRECTORY round-trips; if pagination is broken you'll see fewer entries than created.
+mkdir page-a
+mkdir page-b
+mkdir page-c
+mkdir page-d
+mkdir page-e
+mkdir page-f
+mkdir page-g
+mkdir page-h
+ls page-*
+exit

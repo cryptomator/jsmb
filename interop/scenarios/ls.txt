@@ -1,7 +1,8 @@
 # Lists the share root and a freshly-created subdirectory.
-# Requires milestones: M4 (TREE_CONNECT), M5 (CREATE / CLOSE), M6 (QUERY_DIRECTORY).
-# Until M6 lands, the `ls` lines will return NT_STATUS_NOT_SUPPORTED — that's expected; kept here as
-# a forward-looking regression scenario for when directory enumeration is implemented.
+# Exercises TREE_CONNECT, CREATE (FILE_DIRECTORY_FILE + FILE_CREATE), CLOSE, and QUERY_DIRECTORY.
+# Expected: both `ls` commands succeed. The first prints the existing `@TempDir` contents; the second
+# prints an empty listing for the freshly-created `ls-scenario` directory (smbclient renders that as
+# just `.` / `..` once it synthesizes them locally, or as "NT_STATUS_NO_SUCH_FILE" — both are correct).
 ls
 mkdir ls-scenario
 cd ls-scenario

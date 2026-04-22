@@ -4,6 +4,7 @@ import org.cryptomator.jsmb.common.MalformedMessageException;
 import org.cryptomator.jsmb.smb2.create.CloseRequest;
 import org.cryptomator.jsmb.smb2.create.CreateRequest;
 import org.cryptomator.jsmb.smb2.ioctl.IoctlRequest;
+import org.cryptomator.jsmb.smb2.query.QueryDirectoryRequest;
 import org.cryptomator.jsmb.smb2.tree.TreeConnectRequest;
 import org.cryptomator.jsmb.smb2.tree.TreeDisconnectRequest;
 import org.cryptomator.jsmb.util.Layouts;
@@ -38,6 +39,7 @@ public class SMB2MessageParser {
 				case TREE_DISCONNECT -> new TreeDisconnectRequest(header, bodySegment);
 				case CREATE -> new CreateRequest(header, bodySegment);
 				case CLOSE -> new CloseRequest(header, bodySegment);
+				case QUERY_DIRECTORY -> new QueryDirectoryRequest(header, bodySegment);
 				default -> new UnhandledRequest(header, bodySegment);
 			};
 		} catch (IllegalArgumentException e) {

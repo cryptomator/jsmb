@@ -1,6 +1,10 @@
 package org.cryptomator.jsmb.smb2;
 
+import org.cryptomator.jsmb.share.DirEntry;
 import org.cryptomator.jsmb.share.SmbOpen;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
 
 /**
  * Server-side state for one opened file/directory, wrapping the {@link SmbOpen} backend handle
@@ -15,8 +19,17 @@ public class Open {
 	public final Session session;
 	public final TreeConnect treeConnect;
 
-	// TODO: populate more Per-Open fields as later milestones need them (oplock, lease, granted access,
-	// directory enumeration cursor, etc. — see MS-SMB2 3.3.1.10).
+	/**
+	 * Cached snapshot of the directory listing for the current {@code QUERY_DIRECTORY} enumeration.
+	 * {@code null} until the first {@code QUERY_DIRECTORY} on this Open; repopulated on
+	 * {@code SL_RESTART_SCAN} / {@code SL_REOPEN}.
+	 */
+	public @Nullable List<DirEntry> directoryEntries;
+
+	/** Cursor into {@link #directoryEntries} — next index to return. */
+	public int nextDirectoryIndex;
+
+	// TODO: populate more Per-Open fields as later milestones need them (oplock, lease, granted access, etc.)
 
 	public Open(FileId fileId, SmbOpen backend, Session session, TreeConnect treeConnect) {
 		this.fileId = fileId;
