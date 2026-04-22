@@ -46,8 +46,8 @@ public class Session {
 	public Object securityContext = null; // TODO adjust type
 	public byte[] sessionKey = null;
 	public boolean signingRequired = false;
-	public Map<?, ?> openTable = new HashMap<>();
-	public Map<?, ?> treeConnectTable = new HashMap<>();
+	public Map<FileId, Open> openTable = new HashMap<>();
+	public Map<Integer, TreeConnect> treeConnectTable = new HashMap<>();
 	public boolean isAnonymous = false;
 	public Instant creationTime = Instant.now();
 	public Instant idleTime = Instant.now();
