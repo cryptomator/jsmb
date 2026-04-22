@@ -1,0 +1,84 @@
+package org.cryptomator.jsmb.smb2.create;
+
+import org.cryptomator.jsmb.smb2.FileId;
+import org.cryptomator.jsmb.smb2.PacketHeader;
+import org.cryptomator.jsmb.smb2.SMB2Message;
+import org.cryptomator.jsmb.util.Layouts;
+
+import java.lang.foreign.MemorySegment;
+
+/**
+ * SMB2 CREATE Response. Fixed portion is 88 bytes; {@link #STRUCTURE_SIZE} is 89 per spec.
+ *
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d166aa9e-0b53-410e-b35e-3933d8131927">2.2.14 SMB2 CREATE Response</a>
+ */
+public record CreateResponse(PacketHeader header, MemorySegment segment) implements SMB2Message {
+
+	public static final char STRUCTURE_SIZE = 89;
+	public static final int FIXED_PORTION_SIZE = 88;
+
+	public static final int CREATE_ACTION_SUPERSEDED = 0;
+	public static final int CREATE_ACTION_OPENED = 1;
+	public static final int CREATE_ACTION_CREATED = 2;
+	public static final int CREATE_ACTION_OVERWRITTEN = 3;
+
+	public CreateResponse {
+		segment.set(Layouts.LE_UINT16, 0, STRUCTURE_SIZE);
+	}
+
+	public CreateResponse(PacketHeader header) {
+		this(header, MemorySegment.ofArray(new byte[FIXED_PORTION_SIZE]));
+	}
+
+	public void oplockLevel(byte level) {
+		segment.set(Layouts.BYTE, 2, level);
+	}
+
+	public void flags(byte flags) {
+		segment.set(Layouts.BYTE, 3, flags);
+	}
+
+	public void createAction(int action) {
+		segment.set(Layouts.LE_INT32, 4, action);
+	}
+
+	public void creationTime(long fileTime) {
+		segment.set(Layouts.LE_INT64, 8, fileTime);
+	}
+
+	public void lastAccessTime(long fileTime) {
+		segment.set(Layouts.LE_INT64, 16, fileTime);
+	}
+
+	public void lastWriteTime(long fileTime) {
+		segment.set(Layouts.LE_INT64, 24, fileTime);
+	}
+
+	public void changeTime(long fileTime) {
+		segment.set(Layouts.LE_INT64, 32, fileTime);
+	}
+
+	public void allocationSize(long size) {
+		segment.set(Layouts.LE_INT64, 40, size);
+	}
+
+	public void endOfFile(long size) {
+		segment.set(Layouts.LE_INT64, 48, size);
+	}
+
+	public void fileAttributes(int attributes) {
+		segment.set(Layouts.LE_INT32, 56, attributes);
+	}
+
+	public void fileId(FileId fileId) {
+		fileId.writeTo(segment.asSlice(64, FileId.SIZE));
+	}
+
+	public void createContextsOffset(int offset) {
+		segment.set(Layouts.LE_INT32, 80, offset);
+	}
+
+	public void createContextsLength(int length) {
+		segment.set(Layouts.LE_INT32, 84, length);
+	}
+}

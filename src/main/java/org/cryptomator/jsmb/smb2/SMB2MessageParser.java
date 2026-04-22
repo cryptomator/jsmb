@@ -1,6 +1,8 @@
 package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.common.MalformedMessageException;
+import org.cryptomator.jsmb.smb2.create.CloseRequest;
+import org.cryptomator.jsmb.smb2.create.CreateRequest;
 import org.cryptomator.jsmb.smb2.ioctl.IoctlRequest;
 import org.cryptomator.jsmb.smb2.tree.TreeConnectRequest;
 import org.cryptomator.jsmb.smb2.tree.TreeDisconnectRequest;
@@ -34,6 +36,8 @@ public class SMB2MessageParser {
 				case IOCTL -> new IoctlRequest(header, bodySegment);
 				case TREE_CONNECT -> new TreeConnectRequest(header, bodySegment);
 				case TREE_DISCONNECT -> new TreeDisconnectRequest(header, bodySegment);
+				case CREATE -> new CreateRequest(header, bodySegment);
+				case CLOSE -> new CloseRequest(header, bodySegment);
 				default -> new UnhandledRequest(header, bodySegment);
 			};
 		} catch (IllegalArgumentException e) {

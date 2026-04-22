@@ -18,6 +18,9 @@ import org.cryptomator.jsmb.smb2.Session;
 import org.cryptomator.jsmb.smb2.SessionSetupRequest;
 import org.cryptomator.jsmb.smb2.SessionSetupResponse;
 import org.cryptomator.jsmb.smb2.UnhandledRequest;
+import org.cryptomator.jsmb.smb2.create.CloseRequest;
+import org.cryptomator.jsmb.smb2.create.CreateHandler;
+import org.cryptomator.jsmb.smb2.create.CreateRequest;
 import org.cryptomator.jsmb.smb2.crypto.MessageEncryptor;
 import org.cryptomator.jsmb.smb2.crypto.TransformHeader;
 import org.cryptomator.jsmb.smb2.ioctl.IoctlHandler;
@@ -51,6 +54,7 @@ class TcpConnection implements Runnable {
 	private final Runtime runtime;
 	private final IoctlHandler ioctlHandler;
 	private final TreeConnectHandler treeConnectHandler;
+	private final CreateHandler createHandler;
 	private final MessageEncryptor encryptor = new MessageEncryptor();
 
 	public TcpConnection(TcpServer server, Socket socket) {
@@ -61,6 +65,7 @@ class TcpConnection implements Runnable {
 		this.runtime = new Runtime(connection);
 		this.ioctlHandler = new IoctlHandler(connection);
 		this.treeConnectHandler = new TreeConnectHandler(connection);
+		this.createHandler = new CreateHandler(connection);
 	}
 
 	@Override
@@ -145,6 +150,8 @@ class TcpConnection implements Runnable {
 				case IoctlRequest request -> ioctlHandler.handle(request);
 				case TreeConnectRequest request -> treeConnectHandler.connect(request);
 				case TreeDisconnectRequest request -> treeConnectHandler.disconnect(request);
+				case CreateRequest request -> createHandler.create(request);
+				case CloseRequest request -> createHandler.close(request);
 				case UnhandledRequest request -> {
 					LOG.debug("Command 0x{} not implemented, replying STATUS_NOT_SUPPORTED", Integer.toHexString(request.header().command()));
 					yield ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);

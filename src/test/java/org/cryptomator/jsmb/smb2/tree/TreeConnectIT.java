@@ -29,7 +29,7 @@ import java.nio.file.Path;
 public class TreeConnectIT {
 
 	@TempDir
-	Path shareRoot;
+	static Path shareRoot;
 
 	private TcpServer server;
 	private SMBClient client;
