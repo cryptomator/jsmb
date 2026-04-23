@@ -1,0 +1,8 @@
+# Exercises M10 — rename via `smbclient rename` (SET_INFO + FileRenameInformation).
+# Requires milestones M4 (TREE_CONNECT), M5 (CREATE / CLOSE), M9 (WRITE), M10 (SET_INFO).
+!sh -c 'echo "will-move" > /tmp/movable.txt'
+put /tmp/movable.txt movable.txt
+rename movable.txt moved.txt
+ls moved.txt
+ls movable.txt
+exit

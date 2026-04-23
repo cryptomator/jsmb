@@ -28,6 +28,8 @@ import org.cryptomator.jsmb.smb2.crypto.MessageEncryptor;
 import org.cryptomator.jsmb.smb2.crypto.TransformHeader;
 import org.cryptomator.jsmb.smb2.info.QueryInfoHandler;
 import org.cryptomator.jsmb.smb2.info.QueryInfoRequest;
+import org.cryptomator.jsmb.smb2.info.SetInfoHandler;
+import org.cryptomator.jsmb.smb2.info.SetInfoRequest;
 import org.cryptomator.jsmb.smb2.io.FlushRequest;
 import org.cryptomator.jsmb.smb2.io.ReadHandler;
 import org.cryptomator.jsmb.smb2.io.ReadRequest;
@@ -69,6 +71,7 @@ class TcpConnection implements Runnable {
 	private final CreateHandler createHandler;
 	private final QueryDirectoryHandler queryDirectoryHandler;
 	private final QueryInfoHandler queryInfoHandler;
+	private final SetInfoHandler setInfoHandler;
 	private final ReadHandler readHandler;
 	private final WriteHandler writeHandler;
 	private final MessageEncryptor encryptor = new MessageEncryptor();
@@ -84,6 +87,7 @@ class TcpConnection implements Runnable {
 		this.createHandler = new CreateHandler(connection);
 		this.queryDirectoryHandler = new QueryDirectoryHandler(connection);
 		this.queryInfoHandler = new QueryInfoHandler(server, connection);
+		this.setInfoHandler = new SetInfoHandler(connection);
 		this.readHandler = new ReadHandler(connection);
 		this.writeHandler = new WriteHandler(connection);
 	}
@@ -178,6 +182,7 @@ class TcpConnection implements Runnable {
 				case CloseRequest request -> createHandler.close(request);
 				case QueryDirectoryRequest request -> queryDirectoryHandler.query(request);
 				case QueryInfoRequest request -> queryInfoHandler.query(request);
+				case SetInfoRequest request -> setInfoHandler.set(request);
 				case ReadRequest request -> readHandler.read(request);
 				case WriteRequest request -> writeHandler.write(request);
 				case FlushRequest request -> writeHandler.flush(request);

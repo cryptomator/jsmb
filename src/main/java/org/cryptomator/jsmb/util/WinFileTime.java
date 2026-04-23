@@ -32,4 +32,16 @@ public class WinFileTime {
 	public static long now() {
 		return fromInstant(Instant.now());
 	}
+
+	/**
+	 * Converts Windows 100-ns intervals since 1601-01-01 UTC back to an {@link Instant}.
+	 *
+	 * @param fileTime 100-nanosecond intervals since 1601-01-01 UTC
+	 * @return the corresponding {@link Instant}
+	 */
+	public static Instant toInstant(long fileTime) {
+		long millis = fileTime / 10_000 - EPOCH_DIFF;
+		long remainderNanos = (fileTime % 10_000) * 100;
+		return Instant.ofEpochMilli(millis).plusNanos(remainderNanos);
+	}
 }

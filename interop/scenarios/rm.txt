@@ -1,0 +1,10 @@
+# Exercises M10 — deletion via `smbclient rm`. The client opens the file with DELETE access and
+# either (a) sets FILE_DISPOSITION_INFORMATION via SET_INFO, or (b) uses FILE_DELETE_ON_CLOSE on
+# CREATE. Both paths unlink the file at CLOSE time. Requires M4 (TREE_CONNECT), M5 (CREATE /
+# CLOSE), M9 (WRITE), M10 (SET_INFO).
+!sh -c 'echo "doomed" > /tmp/doomed.txt'
+put /tmp/doomed.txt doomed.txt
+ls doomed.txt
+rm doomed.txt
+ls doomed.txt
+exit
