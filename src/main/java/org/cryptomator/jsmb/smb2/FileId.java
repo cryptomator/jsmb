@@ -3,7 +3,7 @@ package org.cryptomator.jsmb.smb2;
 import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.UUID;
 
 /**
  * A 16-byte SMB2 {@code FileId}: a pair of 64-bit handles that together identify an open object.
@@ -23,13 +23,8 @@ public record FileId(long persistentHandle, long volatileHandle) {
 	 * Generates a random, non-zero {@link FileId} suitable for a newly opened object.
 	 */
 	public static FileId random() {
-		var rnd = ThreadLocalRandom.current();
-		long p, v;
-		do {
-			p = rnd.nextLong();
-			v = rnd.nextLong();
-		} while (p == 0L || v == 0L || (p == -1L && v == -1L));
-		return new FileId(p, v);
+		var uuid = UUID.randomUUID();
+		return new FileId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
 	}
 
 	public static FileId fromSegment(MemorySegment segment) {
