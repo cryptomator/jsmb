@@ -89,6 +89,20 @@ class CreateMessageTest {
 		}
 
 		@Test
+		@DisplayName("fileId(FileId) writes the FileId back at offset 8 for sentinel substitution in compound chains")
+		void fileIdSetter() {
+			var body = new byte[24];
+			var seg = MemorySegment.ofArray(body);
+			seg.set(Layouts.LE_UINT16, 0, (char) 24);
+			var request = new CloseRequest(null, seg);
+
+			request.fileId(new FileId(0xCAFEL, 0xBABEL));
+
+			Assertions.assertEquals(0xCAFEL, seg.get(Layouts.LE_INT64, 8));
+			Assertions.assertEquals(0xBABEL, seg.get(Layouts.LE_INT64, 16));
+		}
+
+		@Test
 		@DisplayName("postQueryAttrib() reflects the SMB2_CLOSE_FLAG_POSTQUERY_ATTRIB bit")
 		void postQueryAttribBit() {
 			var body = new byte[24];
@@ -131,6 +145,15 @@ class CreateMessageTest {
 			Assertions.assertEquals(0x00000080, seg.get(Layouts.LE_INT32, 56));
 			Assertions.assertEquals(0xDEADL, seg.get(Layouts.LE_INT64, 64));
 			Assertions.assertEquals(0xBEEFL, seg.get(Layouts.LE_INT64, 72));
+		}
+
+		@Test
+		@DisplayName("fileId() reads back the FileId written by fileId(FileId), so the compound loop can propagate it to related operations")
+		void fileIdRoundTrip() {
+			var response = new CreateResponse(PacketHeader.builder().build());
+			response.fileId(new FileId(0xA1A1_A1A1L, 0xB2B2_B2B2L));
+
+			Assertions.assertEquals(new FileId(0xA1A1_A1A1L, 0xB2B2_B2B2L), response.fileId());
 		}
 	}
 

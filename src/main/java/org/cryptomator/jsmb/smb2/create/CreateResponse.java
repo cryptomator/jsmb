@@ -74,6 +74,10 @@ public record CreateResponse(PacketHeader header, MemorySegment segment) impleme
 		fileId.writeTo(segment.asSlice(64, FileId.SIZE));
 	}
 
+	public FileId fileId() {
+		return FileId.fromSegment(segment.asSlice(64, FileId.SIZE));
+	}
+
 	public void createContextsOffset(int offset) {
 		segment.set(Layouts.LE_INT32, 80, offset);
 	}

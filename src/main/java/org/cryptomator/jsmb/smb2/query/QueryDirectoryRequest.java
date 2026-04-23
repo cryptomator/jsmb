@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2.query;
 
 import org.cryptomator.jsmb.smb2.FileId;
+import org.cryptomator.jsmb.smb2.FileIdCarrying;
 import org.cryptomator.jsmb.smb2.PacketHeader;
 import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.util.Layouts;
@@ -14,7 +15,7 @@ import java.nio.charset.StandardCharsets;
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/10906442-294c-46d3-8515-c277efe1f752">2.2.33 SMB2 QUERY_DIRECTORY Request</a>
  */
-public record QueryDirectoryRequest(PacketHeader header, MemorySegment segment) implements SMB2Message {
+public record QueryDirectoryRequest(PacketHeader header, MemorySegment segment) implements SMB2Message, FileIdCarrying {
 
 	/** Reset the directory enumeration to the start. */
 	public static final byte FLAG_RESTART_SCAN = 0x01;
@@ -43,6 +44,10 @@ public record QueryDirectoryRequest(PacketHeader header, MemorySegment segment) 
 
 	public FileId fileId() {
 		return FileId.fromSegment(segment.asSlice(8, FileId.SIZE));
+	}
+
+	public void fileId(FileId fileId) {
+		fileId.writeTo(segment.asSlice(8, FileId.SIZE));
 	}
 
 	public char fileNameOffset() {

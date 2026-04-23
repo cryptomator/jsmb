@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb.smb2.query;
 
+import org.cryptomator.jsmb.smb2.FileId;
 import org.cryptomator.jsmb.smb2.PacketHeader;
 import org.cryptomator.jsmb.util.Layouts;
 import org.junit.jupiter.api.Assertions;
@@ -42,6 +43,20 @@ class QueryDirectoryMessageTest {
 			Assertions.assertEquals(0x1122334455667788L, request.fileId().persistentHandle());
 			Assertions.assertEquals(0x99AABBCCDDEEFF00L, request.fileId().volatileHandle());
 			Assertions.assertEquals(0x10000, request.outputBufferLength());
+		}
+
+		@Test
+		@DisplayName("fileId(FileId) writes the FileId back at offset 8 for sentinel substitution in compound chains")
+		void fileIdSetter() {
+			var body = new byte[32];
+			var seg = MemorySegment.ofArray(body);
+			seg.set(Layouts.LE_UINT16, 0, (char) 33);
+			var request = new QueryDirectoryRequest(null, seg);
+
+			request.fileId(new FileId(0x1234L, 0x5678L));
+
+			Assertions.assertEquals(0x1234L, seg.get(Layouts.LE_INT64, 8));
+			Assertions.assertEquals(0x5678L, seg.get(Layouts.LE_INT64, 16));
 		}
 
 		@Test

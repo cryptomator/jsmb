@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2.info;
 
 import org.cryptomator.jsmb.smb2.FileId;
+import org.cryptomator.jsmb.smb2.FileIdCarrying;
 import org.cryptomator.jsmb.smb2.PacketHeader;
 import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.util.Layouts;
@@ -13,7 +14,7 @@ import java.lang.foreign.MemorySegment;
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/05391f4e-b5e8-4d8e-b0d5-1c4fdd26dc74">2.2.37 SMB2 QUERY_INFO Request</a>
  */
-public record QueryInfoRequest(PacketHeader header, MemorySegment segment) implements SMB2Message {
+public record QueryInfoRequest(PacketHeader header, MemorySegment segment) implements SMB2Message, FileIdCarrying {
 
 	/** {@code SMB2_0_INFO_FILE} — the request is for file-level info (MS-FSCC 2.4). */
 	public static final byte INFO_TYPE_FILE = 0x01;
@@ -58,5 +59,9 @@ public record QueryInfoRequest(PacketHeader header, MemorySegment segment) imple
 
 	public FileId fileId() {
 		return FileId.fromSegment(segment.asSlice(24, FileId.SIZE));
+	}
+
+	public void fileId(FileId fileId) {
+		fileId.writeTo(segment.asSlice(24, FileId.SIZE));
 	}
 }

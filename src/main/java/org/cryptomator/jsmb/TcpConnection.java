@@ -8,6 +8,8 @@ import org.cryptomator.jsmb.smb1.SMB1Negotiator;
 import org.cryptomator.jsmb.smb1.SmbComNegotiateRequest;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
+import org.cryptomator.jsmb.smb2.FileId;
+import org.cryptomator.jsmb.smb2.FileIdCarrying;
 import org.cryptomator.jsmb.smb2.LogoffRequest;
 import org.cryptomator.jsmb.smb2.NegotiateRequest;
 import org.cryptomator.jsmb.smb2.Negotiator;
@@ -21,6 +23,7 @@ import org.cryptomator.jsmb.smb2.UnhandledRequest;
 import org.cryptomator.jsmb.smb2.create.CloseRequest;
 import org.cryptomator.jsmb.smb2.create.CreateHandler;
 import org.cryptomator.jsmb.smb2.create.CreateRequest;
+import org.cryptomator.jsmb.smb2.create.CreateResponse;
 import org.cryptomator.jsmb.smb2.crypto.MessageEncryptor;
 import org.cryptomator.jsmb.smb2.crypto.TransformHeader;
 import org.cryptomator.jsmb.smb2.info.QueryInfoHandler;
@@ -150,8 +153,12 @@ class TcpConnection implements Runnable {
 	private void handleSmb2Packet(MemorySegment segment, boolean requestEncrypted) throws MalformedMessageException {
 		int offset = 0;
 		int nextCommand;
+		FileId chainedFileId = null;
 		do {
 			var msg = SMB2MessageParser.parse(segment.asSlice(offset));
+			if (msg instanceof FileIdCarrying msgWithFile && chainedFileId != null && msg.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS)) {
+				msgWithFile.substituteFileIdIfSentinel(chainedFileId);
+			}
 			var response = switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
@@ -169,6 +176,9 @@ class TcpConnection implements Runnable {
 				}
 				default -> throw new MalformedMessageException("Unexpected SMB2 message type: " + msg.getClass().getSimpleName());
 			};
+			if (response instanceof CreateResponse cr) {
+				chainedFileId = cr.fileId();
+			}
 			var signed = sign(msg, response);
 			writeWire(maybeEncrypt(signed, requestEncrypted));
 			nextCommand = msg.header().nextCommand();

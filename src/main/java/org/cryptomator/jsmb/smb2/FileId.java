@@ -8,7 +8,7 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * A 16-byte SMB2 {@code FileId}: a pair of 64-bit handles that together identify an open object.
  *
- * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/3088d198-ad72-4e1e-92cd-ee65a0a6c14b">MS-SMB2 2.2.14.1 SMB2_FILEID</a>
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/f1d9b40d-e335-45fc-9d0b-199a31ede4c3">MS-SMB2 2.2.14.1 SMB2_FILEID</a>
  */
 public record FileId(long persistentHandle, long volatileHandle) {
 
