@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [smoke.txt, mkdir.txt, ls.txt, query-paginated.txt, query-info.txt, read.txt, write.txt, rm.txt, rename.txt]
+        scenario: [smoke.txt, mkdir.txt, ls.txt, query-paginated.txt, query-info.txt, read.txt, write.txt, rm.txt, rename.txt, end-to-end.txt]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0

@@ -1,0 +1,16 @@
+# End-to-end CRUD journey: mkdir → create+write → list → stat → read-back → rename → delete.
+# Mirrors EndToEndIT but driven via Samba's smbclient instead of smbj. Exercises M1–M10 in one
+# go. Any non-zero NT_STATUS_* from the client (other than the expected NO_SUCH_FILE after the
+# final rm) indicates a regression somewhere in the chain.
+!sh -c 'echo "end-to-end payload" > /tmp/payload.txt'
+mkdir subdir
+cd subdir
+put /tmp/payload.txt a.txt
+ls
+get a.txt /tmp/roundtrip.txt
+!sh -c 'diff /tmp/payload.txt /tmp/roundtrip.txt && echo PAYLOAD_MATCH'
+rename a.txt b.txt
+ls b.txt
+rm b.txt
+ls b.txt
+exit

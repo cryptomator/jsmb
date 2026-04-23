@@ -24,6 +24,9 @@ import org.cryptomator.jsmb.smb2.create.CloseRequest;
 import org.cryptomator.jsmb.smb2.create.CreateHandler;
 import org.cryptomator.jsmb.smb2.create.CreateRequest;
 import org.cryptomator.jsmb.smb2.create.CreateResponse;
+import org.cryptomator.jsmb.smb2.echo.CancelRequest;
+import org.cryptomator.jsmb.smb2.echo.EchoRequest;
+import org.cryptomator.jsmb.smb2.notify.ChangeNotifyRequest;
 import org.cryptomator.jsmb.smb2.crypto.MessageEncryptor;
 import org.cryptomator.jsmb.smb2.crypto.TransformHeader;
 import org.cryptomator.jsmb.smb2.info.QueryInfoHandler;
@@ -171,7 +174,7 @@ class TcpConnection implements Runnable {
 			if (msg instanceof FileIdCarrying msgWithFile && chainedFileId != null && msg.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS)) {
 				msgWithFile.substituteFileIdIfSentinel(chainedFileId);
 			}
-			var response = switch (msg) {
+			SMB2Message response = switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
 				case LogoffRequest request -> runtime.logoff(request);
@@ -186,19 +189,32 @@ class TcpConnection implements Runnable {
 				case ReadRequest request -> readHandler.read(request);
 				case WriteRequest request -> writeHandler.write(request);
 				case FlushRequest request -> writeHandler.flush(request);
+				case EchoRequest request -> runtime.echo(request);
+				case ChangeNotifyRequest request -> runtime.changeNotify(request);
+				case CancelRequest request -> {
+					// CANCEL is one-way — no response is emitted for the CANCEL itself. jSMB has no async
+					// requests in flight, so there is nothing to interrupt; log and drop.
+					LOG.debug("CANCEL messageId={} (no async in flight)", request.header().messageId());
+					yield null;
+				}
 				case UnhandledRequest request -> {
 					LOG.debug("Command 0x{} not implemented, replying STATUS_NOT_SUPPORTED", Integer.toHexString(request.header().command()));
 					yield ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
 				}
 				default -> throw new MalformedMessageException("Unexpected SMB2 message type: " + msg.getClass().getSimpleName());
 			};
+			// Advance the chain cursor before the null-response guard so `continue` still makes progress.
+			nextCommand = msg.header().nextCommand();
+			offset += nextCommand;
+			if (response == null) {
+				// CANCEL emits no response; later elements of a compound chain still need theirs, so continue.
+				continue;
+			}
 			if (response instanceof CreateResponse cr) {
 				chainedFileId = cr.fileId();
 			}
 			var signed = sign(msg, response);
 			writeWire(maybeEncrypt(signed, requestEncrypted));
-			nextCommand = msg.header().nextCommand();
-			offset += nextCommand;
 		} while (nextCommand != 0);
 	}
 

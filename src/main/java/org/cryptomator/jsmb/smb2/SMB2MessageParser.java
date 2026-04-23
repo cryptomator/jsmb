@@ -3,6 +3,9 @@ package org.cryptomator.jsmb.smb2;
 import org.cryptomator.jsmb.common.MalformedMessageException;
 import org.cryptomator.jsmb.smb2.create.CloseRequest;
 import org.cryptomator.jsmb.smb2.create.CreateRequest;
+import org.cryptomator.jsmb.smb2.echo.CancelRequest;
+import org.cryptomator.jsmb.smb2.echo.EchoRequest;
+import org.cryptomator.jsmb.smb2.notify.ChangeNotifyRequest;
 import org.cryptomator.jsmb.smb2.info.QueryInfoRequest;
 import org.cryptomator.jsmb.smb2.info.SetInfoRequest;
 import org.cryptomator.jsmb.smb2.io.FlushRequest;
@@ -50,6 +53,9 @@ public class SMB2MessageParser {
 				case READ -> new ReadRequest(header, bodySegment);
 				case WRITE -> new WriteRequest(header, bodySegment);
 				case FLUSH -> new FlushRequest(header, bodySegment);
+				case ECHO -> new EchoRequest(header, bodySegment);
+				case CANCEL -> new CancelRequest(header, bodySegment);
+				case CHANGE_NOTIFY -> new ChangeNotifyRequest(header, bodySegment);
 				default -> new UnhandledRequest(header, bodySegment);
 			};
 		} catch (IllegalArgumentException e) {
