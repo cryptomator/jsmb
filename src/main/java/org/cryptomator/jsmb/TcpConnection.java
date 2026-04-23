@@ -106,7 +106,6 @@ class TcpConnection implements Runnable {
 				if (requestEncrypted) {
 					messageSegment = decryptTransform(messageSegment);
 				}
-				messageSegment = messageSegment.asReadOnly();
 
 				// 4. determine protocol and handle message:
 				if (SMB1MessageParser.isSmb1(messageSegment)) {
