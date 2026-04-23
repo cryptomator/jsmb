@@ -148,9 +148,10 @@ class TcpConnection implements Runnable {
 	}
 
 	private void handleSmb2Packet(MemorySegment segment, boolean requestEncrypted) throws MalformedMessageException {
-		int nextCommand = 0;
+		int offset = 0;
+		int nextCommand;
 		do {
-			var msg = SMB2MessageParser.parse(segment.asSlice(nextCommand));
+			var msg = SMB2MessageParser.parse(segment.asSlice(offset));
 			var response = switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
@@ -171,6 +172,7 @@ class TcpConnection implements Runnable {
 			var signed = sign(msg, response);
 			writeWire(maybeEncrypt(signed, requestEncrypted));
 			nextCommand = msg.header().nextCommand();
+			offset += nextCommand;
 		} while (nextCommand != 0);
 	}
 
