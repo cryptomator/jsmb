@@ -110,6 +110,14 @@ class TcpConnection implements Runnable {
 				int messageSize = transportHeaderSegment.get(Layouts.BE_INT32, 0); // "network byte order" is big endian
 				assert messageSize < 0x00FFFFFF; // first byte is always 0
 
+				// Cap the NBSS-declared length before allocating. A malicious client could claim the full
+				// 24-bit NBSS range (~16 MiB) on every frame and force us to hold that much per connection.
+				// 2× maxTransactSize gives headroom for legitimate compound chains without opening that door.
+				int maxMessageSize = Math.max(2 * connection.maxTransactSize, 64 * 1024);
+				if (messageSize < 0 || messageSize > maxMessageSize) {
+					throw new MalformedMessageException("NBSS frame length " + messageSize + " exceeds cap " + maxMessageSize);
+				}
+
 				// 2. read SMB or SMB2 message:
 				byte[] message = new byte[messageSize];
 				if (in.readNBytes(message, 0, messageSize) != messageSize) {

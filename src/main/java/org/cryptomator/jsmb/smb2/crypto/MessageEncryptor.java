@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb.smb2.crypto;
 
+import org.cryptomator.jsmb.common.MalformedMessageException;
 import org.cryptomator.jsmb.util.Bytes;
 import org.cryptomator.jsmb.util.Layouts;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -83,19 +84,21 @@ public class MessageEncryptor {
 	/**
 	 * Decrypts an SMB2 TRANSFORM_HEADER + ciphertext buffer and returns the plaintext message.
 	 *
+	 * @throws MalformedMessageException if the buffer is too small for a TRANSFORM_HEADER, carries the
+	 *         wrong protocol id, or if {@code OriginalMessageSize} doesn't match the ciphertext length
 	 * @throws AEADBadTagException if the GCM authentication tag does not validate
 	 */
-	public byte[] decrypt(MemorySegment transformSegment, byte[] key) throws AEADBadTagException {
+	public byte[] decrypt(MemorySegment transformSegment, byte[] key) throws MalformedMessageException, AEADBadTagException {
 		if (transformSegment.byteSize() < TransformHeader.STRUCTURE_SIZE) {
-			throw new IllegalArgumentException("Buffer smaller than TRANSFORM_HEADER");
+			throw new MalformedMessageException("Buffer smaller than TRANSFORM_HEADER");
 		}
 		var header = new TransformHeader(transformSegment.asSlice(0, TransformHeader.STRUCTURE_SIZE));
 		if (header.protocolId() != TransformHeader.PROTOCOL_ID) {
-			throw new IllegalArgumentException("Not a SMB2 TRANSFORM_HEADER");
+			throw new MalformedMessageException("Not a SMB2 TRANSFORM_HEADER");
 		}
 		int ciphertextLength = header.originalMessageSize();
-		if (transformSegment.byteSize() != TransformHeader.STRUCTURE_SIZE + ciphertextLength) {
-			throw new IllegalArgumentException("Encrypted payload length mismatch: header says " + ciphertextLength + ", buffer has " + (transformSegment.byteSize() - TransformHeader.STRUCTURE_SIZE));
+		if (ciphertextLength < 0 || transformSegment.byteSize() != TransformHeader.STRUCTURE_SIZE + ciphertextLength) {
+			throw new MalformedMessageException("Encrypted payload length mismatch: header says " + ciphertextLength + ", buffer has " + (transformSegment.byteSize() - TransformHeader.STRUCTURE_SIZE));
 		}
 		byte[] nonce = Arrays.copyOf(header.nonce(), GCM_NONCE_BYTES);
 		byte[] aad = transformSegment.asSlice(20, 32).toArray(Layouts.BYTE);

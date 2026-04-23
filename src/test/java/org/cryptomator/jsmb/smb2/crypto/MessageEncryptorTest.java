@@ -1,5 +1,7 @@
 package org.cryptomator.jsmb.smb2.crypto;
 
+import org.cryptomator.jsmb.common.MalformedMessageException;
+import org.cryptomator.jsmb.util.Layouts;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,21 +82,47 @@ class MessageEncryptorTest {
 	}
 
 	@Test
-	@DisplayName("Decrypt rejects a buffer whose ProtocolId is not 0xFD 'SMB'")
-	public void testDecryptRejectsWrongProtocolId() {
+	@DisplayName("Decrypt rejects a buffer smaller than the 52-byte TRANSFORM_HEADER with MalformedMessageException")
+	public void testDecryptRejectsShortBuffer() {
 		byte[] key = new byte[32];
-		byte[] wire = new byte[TransformHeader.STRUCTURE_SIZE];
-		Assertions.assertThrows(IllegalArgumentException.class, () -> new MessageEncryptor().decrypt(MemorySegment.ofArray(wire), key));
+		byte[] tooShort = new byte[TransformHeader.STRUCTURE_SIZE - 1];
+		Assertions.assertThrows(MalformedMessageException.class, () -> new MessageEncryptor().decrypt(MemorySegment.ofArray(tooShort), key));
 	}
 
 	@Test
-	@DisplayName("Decrypt rejects a buffer whose length does not match OriginalMessageSize")
+	@DisplayName("Decrypt rejects a buffer whose ProtocolId is not 0xFD 'SMB' with MalformedMessageException")
+	public void testDecryptRejectsWrongProtocolId() {
+		byte[] key = new byte[32];
+		byte[] wire = new byte[TransformHeader.STRUCTURE_SIZE];
+		Assertions.assertThrows(MalformedMessageException.class, () -> new MessageEncryptor().decrypt(MemorySegment.ofArray(wire), key));
+	}
+
+	@Test
+	@DisplayName("Decrypt rejects a buffer whose length does not match OriginalMessageSize with MalformedMessageException")
 	public void testDecryptRejectsSizeMismatch() {
 		byte[] key = new byte[32];
 		var encryptor = new MessageEncryptor();
 		byte[] wire = encryptor.encrypt("ok".getBytes(), key, 0L);
 		byte[] truncated = Arrays.copyOf(wire, wire.length - 1);
-		Assertions.assertThrows(IllegalArgumentException.class, () -> encryptor.decrypt(MemorySegment.ofArray(truncated), key));
+		Assertions.assertThrows(MalformedMessageException.class, () -> encryptor.decrypt(MemorySegment.ofArray(truncated), key));
+	}
+
+	@Test
+	@DisplayName("Decrypt rejects a TRANSFORM_HEADER that claims an OriginalMessageSize much larger than the buffer")
+	public void testDecryptRejectsTooLargeOriginalMessageSize() {
+		// Construct a 164-byte NBSS frame (52-byte TRANSFORM_HEADER + 112-byte ciphertext) whose header
+		// claims OriginalMessageSize = 0x00100070 (1,048,688) — the exact length-lie from tooLong.json.
+		byte[] wire = new byte[164];
+		var seg = MemorySegment.ofArray(wire);
+		seg.set(Layouts.LE_INT32, 0, TransformHeader.PROTOCOL_ID);
+		// signature @ 4-19 and nonce @ 20-35 don't matter: we fail before GCM runs.
+		seg.set(Layouts.LE_INT32, 36, 0x00100070); // OriginalMessageSize (the lie)
+		seg.set(Layouts.LE_UINT16, 42, (char) TransformHeader.FLAG_ENCRYPTED);
+		seg.set(Layouts.LE_INT64, 44, 0x04L);       // SessionId
+
+		var ex = Assertions.assertThrows(MalformedMessageException.class,
+				() -> new MessageEncryptor().decrypt(seg, new byte[32]));
+		Assertions.assertTrue(ex.getMessage().contains("1048688"), "exception message should name the bogus declared size, was: " + ex.getMessage());
 	}
 
 	/**
