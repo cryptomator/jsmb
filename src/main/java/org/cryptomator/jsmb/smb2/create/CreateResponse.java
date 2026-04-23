@@ -85,4 +85,23 @@ public record CreateResponse(PacketHeader header, MemorySegment segment) impleme
 	public void createContextsLength(int length) {
 		segment.set(Layouts.LE_INT32, 84, length);
 	}
+
+	/**
+	 * Returns a new response with {@code context} appended past the fixed portion. Stamps
+	 * {@code CreateContextsOffset} / {@code CreateContextsLength} accordingly; callers are responsible for already
+	 * having written the other fixed-portion fields (they're copied verbatim).
+	 *
+	 * <p>Single-context today. Multiple contexts need {@code Next} chaining and 8-byte inter-context alignment; add
+	 * an overload when a second context class arrives.
+	 */
+	public CreateResponse withCreateContext(CreateContext context) {
+		int ctxSize = (int) context.segment().byteSize();
+		var combined = MemorySegment.ofArray(new byte[FIXED_PORTION_SIZE + ctxSize]);
+		combined.asSlice(0, FIXED_PORTION_SIZE).copyFrom(segment);
+		combined.asSlice(FIXED_PORTION_SIZE, ctxSize).copyFrom(context.segment());
+		var next = new CreateResponse(header, combined);
+		next.createContextsOffset(PacketHeader.STRUCTURE_SIZE + FIXED_PORTION_SIZE);
+		next.createContextsLength(ctxSize);
+		return next;
+	}
 }

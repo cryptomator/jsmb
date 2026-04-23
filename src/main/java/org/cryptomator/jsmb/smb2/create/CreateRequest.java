@@ -6,6 +6,8 @@ import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * SMB2 CREATE Request. Fixed portion is 56 bytes; {@link #structureSize()} is 57 per the spec
@@ -61,6 +63,51 @@ public record CreateRequest(PacketHeader header, MemorySegment segment) implemen
 
 	public int createContextsLength() {
 		return segment.get(Layouts.LE_INT32, 52);
+	}
+
+	/**
+	 * Iterates the request's CreateContexts list. Bounds-checked: malformed offsets that would read outside the
+	 * declared CreateContexts range terminate iteration early rather than throwing.
+	 */
+	public List<CreateContext> createContexts() {
+		int length = createContextsLength();
+		if (length == 0) {
+			return List.of();
+		}
+		int rangeStart = createContextsOffset() - PacketHeader.STRUCTURE_SIZE;
+		int rangeEnd = rangeStart + length;
+		if (rangeStart < 0 || rangeEnd > segment.byteSize()) {
+			return List.of();
+		}
+		var contexts = new ArrayList<CreateContext>();
+		int ctx = rangeStart;
+		while (ctx + 16 <= rangeEnd) {
+			int next = segment.get(Layouts.LE_INT32, ctx);
+			int extent = (next == 0) ? rangeEnd - ctx : next;
+			if (extent <= 0 || ctx + extent > rangeEnd) {
+				break;
+			}
+			contexts.add(new CreateContext(segment.asSlice(ctx, extent)));
+			if (next == 0) {
+				break;
+			}
+			ctx += next;
+		}
+		return contexts;
+	}
+
+	/**
+	 * Convenience: {@code true} iff the request carries a CreateContext whose Name equals {@code name}.
+	 *
+	 * @param name the 4-byte context tag to match (e.g. {@link CreateContext#NAME_MXAC}).
+	 */
+	public boolean hasCreateContext(byte[] name) {
+		for (var ctx : createContexts()) {
+			if (ctx.nameEquals(name)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

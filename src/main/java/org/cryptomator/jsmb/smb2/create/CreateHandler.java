@@ -101,8 +101,16 @@ public record CreateHandler(Connection connection) {
 		response.fileId(fileId);
 		response.createContextsOffset(0);
 		response.createContextsLength(0);
+		if (request.hasCreateContext(CreateContext.NAME_MXAC)) {
+			// The client is asking for the maximal access mask on the freshly opened handle. We don't track ACLs,
+			// so mirror FileInfoWriter.accessInfo() and report FILE_ALL_ACCESS with a success status.
+			response = response.withCreateContext(CreateContext.mxAcResponse(NTStatus.STATUS_SUCCESS, FILE_ALL_ACCESS));
+		}
 		return response;
 	}
+
+	/** {@code FILE_ALL_ACCESS} — full generic access mask. MS-DTYP 2.4.3. */
+	private static final int FILE_ALL_ACCESS = 0x001F01FF;
 
 	public SMB2Message close(CloseRequest request) {
 		var session = connection.sessionTable.get(request.header().sessionId());
