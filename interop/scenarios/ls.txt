@@ -1,8 +1,9 @@
 # Lists the share root and a freshly-created subdirectory.
 # Exercises TREE_CONNECT, CREATE (FILE_DIRECTORY_FILE + FILE_CREATE), CLOSE, and QUERY_DIRECTORY.
-# Expected: both `ls` commands succeed. The first prints the existing `@TempDir` contents; the second
-# prints an empty listing for the freshly-created `ls-scenario` directory (smbclient renders that as
-# just `.` / `..` once it synthesizes them locally, or as "NT_STATUS_NO_SUCH_FILE" — both are correct).
+# Expected: both `ls` commands succeed. The first prints the existing `@TempDir` contents plus the
+# synthetic `.` self-entry (no `..` at the share root); the second prints only `.` / `..` for the
+# freshly-created `ls-scenario` directory — SmbOpen#listChildren injects those pseudo-entries on
+# every directory listing, matching Windows / Samba behaviour.
 ls
 mkdir ls-scenario
 cd ls-scenario

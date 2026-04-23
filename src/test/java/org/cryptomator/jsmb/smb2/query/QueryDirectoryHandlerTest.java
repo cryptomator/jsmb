@@ -59,7 +59,7 @@ class QueryDirectoryHandlerTest {
 	}
 
 	@Test
-	@DisplayName("Populated directory returns entries via FILE_ID_BOTH_DIRECTORY_INFORMATION")
+	@DisplayName("Populated share root returns entries via FILE_ID_BOTH_DIRECTORY_INFORMATION with the synthetic '.' prepended")
 	void populatedDirectory() throws IOException {
 		Files.writeString(shareRoot.resolve("a.txt"), "one");
 		Files.writeString(shareRoot.resolve("b.md"), "two");
@@ -73,7 +73,7 @@ class QueryDirectoryHandlerTest {
 		var buffer = extractOutputBuffer(response);
 		var names = extractNamesIdBoth(buffer);
 		java.util.Collections.sort(names);
-		Assertions.assertEquals(java.util.List.of("a.txt", "b.md"), names);
+		Assertions.assertEquals(java.util.List.of(".", "a.txt", "b.md"), names);
 	}
 
 	@Test
@@ -97,11 +97,13 @@ class QueryDirectoryHandlerTest {
 	}
 
 	@Test
-	@DisplayName("Empty directory on the first call returns STATUS_NO_SUCH_FILE")
-	void noSuchFileWhenEmpty() {
+	@DisplayName("First call whose pattern matches nothing returns STATUS_NO_SUCH_FILE")
+	void noSuchFileWhenNoMatches() throws IOException {
+		Files.createFile(shareRoot.resolve("unmatched.txt"));
+		// "*.nope" matches neither the real child nor the synthetic "." pseudo-entry.
 		var response = handler.query(buildRequest(rootOpen.fileId,
 				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
-				QueryDirectoryRequest.FLAG_RESTART_SCAN, "*", 65536));
+				QueryDirectoryRequest.FLAG_RESTART_SCAN, "*.nope", 65536));
 
 		Assertions.assertInstanceOf(ErrorResponse.class, response);
 		Assertions.assertEquals(NTStatus.STATUS_NO_SUCH_FILE, response.header().status());
@@ -174,48 +176,34 @@ class QueryDirectoryHandlerTest {
 	}
 
 	@Test
-	@DisplayName("Paginated enumeration resumes from the previous cursor")
+	@DisplayName("Paginated enumeration resumes from the previous cursor across each page and then reports STATUS_NO_MORE_FILES")
 	void pagination() throws IOException {
-		// Create 3 entries, each ~104 + 2*N bytes in FILE_ID_BOTH. Size the buffer for one at a time.
+		// 3 real entries + 1 synthetic "." at the share root = 4 entries. Size the buffer for one at a time.
 		for (int i = 1; i <= 3; i++) {
 			Files.createFile(shareRoot.resolve("f" + i));
 		}
-		// one entry of name "f1" (2 UTF-16 bytes ×? nope: "f1" = 2 chars = 4 bytes UTF-16LE)
-		int nameBytes = 4;
-		int oneEntry = ((104 + nameBytes) + 7) & ~7; // aligned
+		// One FILE_ID_BOTH entry is 104 bytes fixed + UTF-16LE name, 8-byte aligned. Names "f1"/"." are ≤ 4 bytes.
+		int oneEntry = ((104 + 4) + 7) & ~7;
 
-		var page1 = handler.query(buildRequest(rootOpen.fileId,
-				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
-				QueryDirectoryRequest.FLAG_RESTART_SCAN, "*", oneEntry));
-		Assertions.assertInstanceOf(QueryDirectoryResponse.class, page1);
-		var page1Names = extractNamesIdBoth(extractOutputBuffer(page1));
-		Assertions.assertEquals(1, page1Names.size());
+		var collected = new java.util.TreeSet<String>();
+		byte flags = QueryDirectoryRequest.FLAG_RESTART_SCAN;
+		for (int page = 1; page <= 4; page++) {
+			var response = handler.query(buildRequest(rootOpen.fileId,
+					FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION, flags, "*", oneEntry));
+			Assertions.assertInstanceOf(QueryDirectoryResponse.class, response, "page " + page + " should succeed");
+			var names = extractNamesIdBoth(extractOutputBuffer(response));
+			Assertions.assertEquals(1, names.size(), "page " + page + " should carry exactly one entry");
+			collected.addAll(names);
+			flags = 0;
+		}
 
-		var page2 = handler.query(buildRequest(rootOpen.fileId,
-				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
-				(byte) 0, "*", oneEntry));
-		Assertions.assertInstanceOf(QueryDirectoryResponse.class, page2);
-		var page2Names = extractNamesIdBoth(extractOutputBuffer(page2));
-		Assertions.assertEquals(1, page2Names.size());
-
-		var page3 = handler.query(buildRequest(rootOpen.fileId,
-				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
-				(byte) 0, "*", oneEntry));
-		var page3Names = extractNamesIdBoth(extractOutputBuffer(page3));
-		Assertions.assertEquals(1, page3Names.size());
-
-		// All drained — next call is STATUS_NO_MORE_FILES.
+		// All four entries drained — the next call reports end-of-enumeration.
 		var done = handler.query(buildRequest(rootOpen.fileId,
-				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
-				(byte) 0, "*", oneEntry));
+				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION, (byte) 0, "*", oneEntry));
 		Assertions.assertInstanceOf(ErrorResponse.class, done);
 		Assertions.assertEquals(NTStatus.STATUS_NO_MORE_FILES, done.header().status());
 
-		var seen = new java.util.TreeSet<String>();
-		seen.addAll(page1Names);
-		seen.addAll(page2Names);
-		seen.addAll(page3Names);
-		Assertions.assertEquals(java.util.Set.of("f1", "f2", "f3"), seen);
+		Assertions.assertEquals(java.util.Set.of(".", "f1", "f2", "f3"), collected);
 	}
 
 	@Test
@@ -223,9 +211,11 @@ class QueryDirectoryHandlerTest {
 	void filenameInformationFormat() throws IOException {
 		Files.createFile(shareRoot.resolve("just-a-name"));
 
+		// Narrow the pattern so the synthetic "." entry doesn't land first and we can assert the fixed
+		// header layout (12-byte base + UTF-16LE name) directly against the single surviving entry.
 		var response = handler.query(buildRequest(rootOpen.fileId,
 				FileInformationClass.FILE_NAMES_INFORMATION,
-				QueryDirectoryRequest.FLAG_RESTART_SCAN, "*", 65536));
+				QueryDirectoryRequest.FLAG_RESTART_SCAN, "just-a-name", 65536));
 
 		Assertions.assertInstanceOf(QueryDirectoryResponse.class, response);
 		var buffer = extractOutputBuffer(response);

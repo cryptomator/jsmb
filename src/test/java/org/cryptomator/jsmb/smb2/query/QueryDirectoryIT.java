@@ -106,11 +106,12 @@ public class QueryDirectoryIT {
 
 	@Test
 	@Order(4)
-	@DisplayName("list() on an empty directory returns an empty list (smbj masks STATUS_NO_SUCH_FILE)")
+	@DisplayName("list() on an empty sub-directory returns just the synthetic '.' and '..' pseudo-entries")
 	public void listEmptyDirectory() throws IOException {
 		Files.createDirectory(shareRoot.resolve("empty-dir"));
 		List<FileIdBothDirectoryInformation> entries = share.list("empty-dir");
-		Assertions.assertTrue(entries.isEmpty());
+		var names = entries.stream().map(FileIdBothDirectoryInformation::getFileName).sorted().toList();
+		Assertions.assertEquals(List.of(".", ".."), names);
 	}
 
 	@Test

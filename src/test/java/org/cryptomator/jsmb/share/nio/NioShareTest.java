@@ -212,7 +212,7 @@ class NioShareTest {
 	class DirectoryTests {
 
 		@Test
-		@DisplayName("listChildren on a populated directory yields every entry")
+		@DisplayName("listChildren on a populated share root yields every entry plus the synthetic '.' (no '..' at the share root)")
 		void listsAllChildren(@TempDir Path root) throws IOException {
 			Files.writeString(root.resolve("a.txt"), "a");
 			Files.writeString(root.resolve("b.txt"), "bb");
@@ -221,7 +221,31 @@ class NioShareTest {
 			try (var dir = share.open("", OPEN_IF_DIR);
 				 var entries = dir.listChildren(null)) {
 				var names = entries.map(DirEntry::name).sorted().toList();
-				Assertions.assertEquals(java.util.List.of("a.txt", "b.txt", "sub"), names);
+				Assertions.assertEquals(java.util.List.of(".", "a.txt", "b.txt", "sub"), names);
+			}
+		}
+
+		@Test
+		@DisplayName("listChildren on a sub-directory yields '.' and '..' pseudo-entries")
+		void listsPseudoEntriesOnSubdirectory(@TempDir Path root) throws IOException {
+			Files.createDirectory(root.resolve("sub"));
+			Files.writeString(root.resolve("sub").resolve("child.txt"), "x");
+			var share = new NioShare(root);
+			try (var dir = share.open("sub", OPEN_IF_DIR);
+				 var entries = dir.listChildren(null)) {
+				var names = entries.map(DirEntry::name).sorted().toList();
+				Assertions.assertEquals(java.util.List.of(".", "..", "child.txt"), names);
+			}
+		}
+
+		@Test
+		@DisplayName("listChildren on an empty share root still yields the synthetic '.' entry")
+		void listsPseudoEntriesOnEmptyShareRoot(@TempDir Path root) throws IOException {
+			var share = new NioShare(root);
+			try (var dir = share.open("", OPEN_IF_DIR);
+				 var entries = dir.listChildren(null)) {
+				var names = entries.map(DirEntry::name).toList();
+				Assertions.assertEquals(java.util.List.of("."), names);
 			}
 		}
 
