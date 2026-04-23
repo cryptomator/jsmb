@@ -15,13 +15,29 @@ jobs:
       contents: read # Required for checkout
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0 # deep fetch for better sonarcloud analysis
       - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'temurin'
           java-version: ${{ env.JAVA_VERSION }}
           cache: 'maven'
+      - name: Cache SonarCloud packages
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
       - name: Build and Test
-        run: ./mvnw -B verify --no-transfer-progress
+        run: >
+          ./mvnw -B verify --no-transfer-progress
+          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+          -Dsonar.projectKey=cryptomator_jsmb
+          -Dsonar.organization=cryptomator
+          -Dsonar.host.url=https://sonarcloud.io
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   interop:
     name: Samba Interop (${{ matrix.scenario }})
