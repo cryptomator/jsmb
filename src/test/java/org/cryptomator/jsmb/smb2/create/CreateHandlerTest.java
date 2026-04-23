@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2.create;
 
 import org.cryptomator.jsmb.Config;
+import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.nio.NioShare;
@@ -39,7 +40,7 @@ class CreateHandlerTest {
 
 	@BeforeEach
 	void setUp() {
-		var global = new Global(Config.DEFAULT);
+		var global = new Global(Config.DEFAULT, new Credentials("DOMAIN", "user", "password"));
 		connection = new Connection(global);
 		share = new NioShare(shareRoot);
 		global.shares.put("data", share);

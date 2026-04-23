@@ -5,7 +5,7 @@ import java.util.EnumSet;
 import java.util.Set;
 
 /**
- * Server-level toggles passed to {@link TcpServer#start(int, java.util.Set)}. Each value is a
+ * Server-level toggles passed to {@link TcpServer#start(int, Set, Credentials)}. Each value is a
  * self-describing flag; an enabled flag is present in the set, a disabled flag is absent.
  */
 public enum Config {
@@ -39,7 +39,7 @@ public enum Config {
 	 * Secure defaults: encryption enforced ({@link #ENCRYPT_DATA}, {@link #REJECT_UNENCRYPTED_ACCESS})
 	 * and signing required ({@link #REQUIRE_MESSAGE_SIGNING}); {@link #DEBUG_ENCRYPTION} deliberately
 	 * omitted so key material stays out of the log. Immutable — pass it straight to
-	 * {@link TcpServer#start(int, Set)} without copying.
+	 * {@link TcpServer#start(int, Set, Credentials)} without copying.
 	 */
 	public static final Set<Config> DEFAULT = Set.of(ENCRYPT_DATA, REJECT_UNENCRYPTED_ACCESS, REQUIRE_MESSAGE_SIGNING);
 

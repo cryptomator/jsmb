@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb;
 
+import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.share.SmbShare;
 import org.cryptomator.jsmb.smb2.Global;
 import org.slf4j.Logger;
@@ -25,12 +26,12 @@ public class TcpServer implements AutoCloseable {
 	public final Instant startTime;
 	public final Global global;
 
-	private TcpServer(ServerSocket serverSocket, Set<Config> config) {
+	private TcpServer(ServerSocket serverSocket, Set<Config> config, Credentials credentials) {
 		this.guid = UUID.randomUUID();
 		this.startTime = Instant.now();
 		this.serverSocket = serverSocket;
 		this.acceptor = Thread.ofVirtual().name("TCP Connection Listener").uncaughtExceptionHandler(this::handleAcceptException).start(this::acceptConnections);
-		this.global = new Global(config);
+		this.global = new Global(config, credentials);
 	}
 
 	public int getLocalPort() {
@@ -55,25 +56,27 @@ public class TcpServer implements AutoCloseable {
 	/**
 	 * Starts a new server with {@link Config#DEFAULT}.
 	 */
-	public static TcpServer start(int port) throws IOException {
-		return start(port, Config.DEFAULT);
+	public static TcpServer start(int port, Credentials credentials) throws IOException {
+		return start(port, Config.DEFAULT, credentials);
 	}
 
 	/**
-	 * Starts a new server with the supplied set of {@link Config} flags.
+	 * Starts a new server with the supplied set of {@link Config} flags and the single {@link Credentials} pair it will
+	 * accept for NTLMv2 session setup.
 	 * <p>
 	 * Callers typically build this set via {@link Config#create(Config...)}:
 	 * <pre>{@code
-	 * TcpServer.start(4445, Config.DEFAULT);
+	 * TcpServer.start(4445, Config.DEFAULT, new Credentials("DOMAIN", "user", "password"));
 	 * }</pre>
 	 *
-	 * @param port  TCP port to listen on, or {@code 0} to pick an ephemeral port
-	 * @param flags set of enabled toggles; an absent flag is disabled
+	 * @param port        TCP port to listen on, or {@code 0} to pick an ephemeral port
+	 * @param flags       set of enabled toggles; an absent flag is disabled
+	 * @param credentials the single identity this server accepts; held for the server's lifetime
 	 */
-	public static TcpServer start(int port, Set<Config> flags) throws IOException {
+	public static TcpServer start(int port, Set<Config> flags, Credentials credentials) throws IOException {
 		var serverSocket = new ServerSocket(port);
 		LOG.info("Server started on port {}", serverSocket.getLocalPort());
-		return new TcpServer(serverSocket, flags);
+		return new TcpServer(serverSocket, flags, credentials);
 	}
 
 	private void acceptConnections() {

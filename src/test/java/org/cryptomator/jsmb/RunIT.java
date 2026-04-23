@@ -28,7 +28,7 @@ public class RunIT {
 	@Disabled("run manually for interactive client testing")
 	@DisplayName("Run TcpServer on port 4445 and block on stdin")
 	public void test() {
-		try (var server = TcpServer.start(4445, Config.create(Config.DEBUG_ENCRYPTION))) {
+		try (var server = TcpServer.start(4445, Config.create(Config.DEBUG_ENCRYPTION), new Credentials("DOMAIN", "user", "password"))) {
 			server.registerShare("data", new NioShare(shareRoot));
 			LOG.info("Registered share 'data' at {}", shareRoot);
 			LOG.info("Ready to accept connections on localhost:{} — Ctrl+C to stop", server.getLocalPort());

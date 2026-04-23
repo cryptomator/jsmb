@@ -41,7 +41,7 @@ public class MirrorEncryptionIT {
 	@BeforeAll
 	public void setup() throws IOException {
 		// Server intentionally has ENCRYPT_DATA disabled — normally responses would be plaintext.
-		server = TcpServer.start(0, Config.create(Config.REQUIRE_MESSAGE_SIGNING));
+		server = TcpServer.start(0, Config.create(Config.REQUIRE_MESSAGE_SIGNING), new Credentials("DOMAIN", "user", "password"));
 		// Client forces encryption — every post-auth request will be wrapped in a TRANSFORM_HEADER.
 		var config = SmbConfig.builder()
 				.withMultiProtocolNegotiate(true)

@@ -49,7 +49,7 @@ public class SambaClientIT {
 	@DisplayName("Run TcpServer on port 4446 for interactive Samba smbclient testing")
 	public void test() {
 		var config = Config.create(Config.ENCRYPT_DATA, Config.REQUIRE_MESSAGE_SIGNING, Config.DEBUG_ENCRYPTION);
-		try (var server = TcpServer.start(PORT, config)) {
+		try (var server = TcpServer.start(PORT, config, new Credentials("DOMAIN", "user", "password"))) {
 			server.registerShare(SHARE_NAME, new NioShare(shareRoot));
 			seedFixtures();
 			logInvocationHelp(server.getLocalPort());

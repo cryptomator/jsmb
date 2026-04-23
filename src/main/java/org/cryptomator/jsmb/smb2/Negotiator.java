@@ -267,7 +267,11 @@ public record Negotiator(TcpServer server, Connection connection) {
 					var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
 					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
 
-					var authenticated = s.authenticate(gssToken.token(), "user", "password", "DOMAIN"); // FIXME hardcoded credentials
+					// NTLMv2 validates by recomputing the response hash from (password, user, domain). If the client
+					// sent a different user or domain than the one this server was started with, the hash mismatches
+					// and authenticate() throws AuthenticationFailedException — no explicit user-lookup needed.
+					var creds = connection.global.credentials;
+					var authenticated = s.authenticate(gssToken.token(), creds.user(), creds.password(), creds.domain());
 					header.status(NTStatus.STATUS_SUCCESS);
 					header.creditResponse((char) 8192);
 					// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654

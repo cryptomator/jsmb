@@ -11,6 +11,7 @@ import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.AuthenticationContext;
 import com.hierynomus.smbj.connection.Connection;
 import com.hierynomus.smbj.session.Session;
+import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.TcpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
@@ -41,7 +42,7 @@ public class IoctlIT {
 
 	@BeforeAll
 	public void setup() throws IOException {
-		server = TcpServer.start(0);
+		server = TcpServer.start(0, new Credentials("DOMAIN", "user", "password"));
 		var config = SmbConfig.builder()
 				.withMultiProtocolNegotiate(true)
 				.withEncryptData(true)
