@@ -300,14 +300,16 @@
 		</profile>
 
 		<!--
-		Manual interop harness: starts jSMB on port 4445 and blocks on stdin so you can drive it
-		from Samba's smbclient running in a Podman container. See the "Manual interop testing with
-		Samba's smbclient" section of README.md for the podman run commands.
+		Manual / interop launcher: starts jSMB on the RunIT default port (4445) and blocks on SIGTERM
+		so external clients (Samba smbclient in Podman, Finder, Explorer, mount, …) can drive the server.
 
-		Enable with: mvn verify -Psamba-harness
+		Enable with: ./mvnw verify -Prun
+
+		All RunIT knobs (port, share, credentials, Config flags, log level, seed) can be overridden
+		via `-Djsmb.*` system properties — see the RunIT javadoc.
 		-->
 		<profile>
-			<id>samba-harness</id>
+			<id>run</id>
 			<build>
 				<plugins>
 					<plugin>
@@ -321,9 +323,9 @@
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-failsafe-plugin</artifactId>
 						<configuration>
-							<test>SambaClientIT</test>
+							<test>RunIT</test>
 							<systemPropertyVariables>
-								<samba.harness>true</samba.harness>
+								<jsmb.harness>true</jsmb.harness>
 							</systemPropertyVariables>
 						</configuration>
 					</plugin>

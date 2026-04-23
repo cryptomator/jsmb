@@ -1,6 +1,6 @@
 # Interop testing with Samba's `smbclient`
 
-Manual, scriptable harness for driving jSMB from Samba's reference client. Designed to augment — not replace — the automated `smbj`-driven integration tests in `src/test/java/`. Gated on a Maven profile so a plain `mvn test` and CI both skip it.
+Manual, scriptable harness for driving jSMB from Samba's reference client. Designed to augment — not replace — the automated `smbj`-driven integration tests in `src/test/java/`. Gated on a Maven profile so a plain `./mvnw test` and CI both skip it.
 
 ## Layout
 
@@ -25,9 +25,9 @@ The first invocation of `run-samba-scenario.sh` builds a small local image (alpi
 
 ## Running a scenario
 
-1. **Start the harness** in a terminal (port 4446, encryption + signing + `DEBUG_ENCRYPTION` enabled, share `data` backed by a fresh `@TempDir`, blocks on `stdin`). Port 4446 avoids the usual 4445 collision with macOS's `upnotifyp`:
+1. **Start the harness** in a terminal (port 4445, encryption + signing + `DEBUG_ENCRYPTION` enabled, share `data` backed by a fresh `@TempDir`, blocks on SIGTERM). Both the server and the wrapper default to 4445 — override with `-Djsmb.port=<port>` and matching `SAMBA_PORT=<port>` if you hit a bind collision (e.g. macOS's `upnotifyp` on some setups):
    ```bash
-   mvn verify -Psamba-harness
+   ./mvnw verify -Prun -Djsmb.config=DEBUG_ENCRYPTION
    ```
 2. **In another terminal, run a scenario against it.** The wrapper auto-selects Linux (`--network host`) vs. macOS/Windows (`host.containers.internal`) networking:
    ```bash
@@ -62,14 +62,14 @@ The `smbclient` command set is documented in `man smbclient`; common commands ar
 
 ## Headless / agent usage (no second terminal)
 
-`SambaClientIT` blocks on a `CountDownLatch` released by a JVM shutdown hook, so signalling the forked test JVM (SIGTERM / SIGINT) shuts the harness down cleanly.
+`RunIT` blocks on a `CountDownLatch` released by a JVM shutdown hook, so signalling the forked test JVM (SIGTERM / SIGINT) shuts the harness down cleanly.
 
 ```bash
 # 1. Background the harness.
-mvn -q verify -Psamba-harness > /tmp/jsmb-harness.log 2>&1 &
+./mvnw -q verify -Prun > /tmp/jsmb-harness.log 2>&1 &
 
 # 2. Wait until the server starts listening (usually ≤ 1–2 s on a warm build).
-until lsof -iTCP:4446 -sTCP:LISTEN >/dev/null 2>&1; do sleep 1; done
+until lsof -iTCP:4445 -sTCP:LISTEN >/dev/null 2>&1; do sleep 1; done
 
 # 3. Run a scenario and inspect the output.
 ./interop/run-samba-scenario.sh smoke.txt
@@ -81,7 +81,7 @@ grep -E 'TREE_CONNECT|CREATE|Session-' /tmp/jsmb-harness.log
 
 # 5. Tear down. Signal the surefire-forked JVM directly (Maven's SIGTERM handler
 #    doesn't cascade to the forked JVM; the fork is what owns the shutdown hook).
-kill -TERM "$(lsof -iTCP:4446 -sTCP:LISTEN -t)"
+kill -TERM "$(lsof -iTCP:4445 -sTCP:LISTEN -t)"
 ```
 
 Interactively, a terminal `Ctrl-C` works because it sends SIGINT to the whole process group — the forked JVM gets its own copy of the signal and its shutdown hook fires in parallel with Maven's own cleanup.
@@ -90,11 +90,11 @@ If `lsof` isn't available, `pkill -TERM -f 'surefirebooter.*jSMB'` matches the f
 
 ## Tunables
 
-All configurable via env vars; defaults match the `samba-harness` Maven profile:
+All configurable via env vars; defaults match the `run` Maven profile:
 
 | Variable      | Default                           | Purpose                                   |
 |---------------|-----------------------------------|-------------------------------------------|
-| `SAMBA_PORT`  | `4446`                            | Port the jSMB harness listens on          |
+| `SAMBA_PORT`  | `4445`                            | Port the jSMB harness listens on          |
 | `SAMBA_SHARE` | `data`                            | Share name registered by the harness      |
 | `SAMBA_USER`  | `DOMAIN/user%password`            | `smbclient -U` spec                       |
 | `SAMBA_DEBUG` | `3`                               | `smbclient -d` level (0–10; 10 = max)     |

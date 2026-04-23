@@ -58,18 +58,18 @@ jobs:
           cache: 'maven'
       - name: Start jSMB harness
         run: |
-          ./mvnw -B -q verify -Psamba-harness --no-transfer-progress > /tmp/jsmb-harness.log 2>&1 &
+          ./mvnw -B -q verify -Prun --no-transfer-progress > /tmp/jsmb-harness.log 2>&1 &
           echo "HARNESS_MVN_PID=$!" >> "$GITHUB_ENV"
-      - name: Wait for port 4446
+      - name: Wait for port 4445
         run: |
           for i in $(seq 1 30); do
-            if lsof -iTCP:4446 -sTCP:LISTEN >/dev/null 2>&1; then
-              echo "jSMB harness is listening on 4446 (after ${i}s)"
+            if lsof -iTCP:4445 -sTCP:LISTEN >/dev/null 2>&1; then
+              echo "jSMB harness is listening on 4445 (after ${i}s)"
               exit 0
             fi
             sleep 1
           done
-          echo "jSMB harness did not start listening on 4446 within 30s" >&2
+          echo "jSMB harness did not start listening on 4445 within 30s" >&2
           cat /tmp/jsmb-harness.log >&2
           exit 1
       - name: Run scenario ${{ matrix.scenario }}
@@ -77,7 +77,7 @@ jobs:
       - name: Stop jSMB harness
         if: always()
         run: |
-          PID=$(lsof -iTCP:4446 -sTCP:LISTEN -t 2>/dev/null || true)
+          PID=$(lsof -iTCP:4445 -sTCP:LISTEN -t 2>/dev/null || true)
           if [ -n "$PID" ]; then
             kill -TERM "$PID" || true
           fi

@@ -9,8 +9,8 @@ A basic SMB server implementation in Java, targeting SMB dialect **3.1.1**.
 Maven project, Java 25.
 
 ```bash
-mvn test           # run all unit + integration tests
-mvn package        # build jar
+./mvnw verify           # run all unit + integration tests
+./mvnw package        # build jar
 ```
 
 ## Embedding
@@ -73,7 +73,31 @@ Embedders plug a filesystem-like backend in via the `SmbShare` / `SmbOpen` inter
 - `smb2.crypto.MessageEncryptor` wraps SMB2 messages in an `SMB2 TRANSFORM_HEADER` via AES-GCM. The server advertises AES-256-GCM first and falls back to AES-128-GCM when the client only supports the latter (e.g. `smbj` 0.14). Session keys are derived from the session key via `NistSP800108KDF` with the MS-SMB2-specified labels (`SMBS2CCipherKey\0` for server→client, `SMBC2SCipherKey\0` for client→server).
 - `TcpConnection.shouldSign` / `selectKey` / `maybeEncrypt` encode the MS-SMB2 decision trees. The current implementation deliberately simplifies: `Channel` is not modelled, so `channelSigningKey` always returns `Session.signingKey`. If channel binding (`SessionSetupRequest.FLAG_BINDING`) is added, revisit both `Negotiator.gssAuthenticate` and `channelSigningKey`.
 
-## Debugging
+## Testing and Debugging
+
+### Running the server manually
+
+`RunIT` launches a jSMB server on `smb://localhost:4445/data`.
+
+```bash
+./mvnw verify -Prun -Djsmb.config=DEBUG_ENCRYPTION
+```
+
+All `-Djsmb.*` system properties can be found in [`RunIT`'s javadoc](src/test/java/org/cryptomator/jsmb/RunIT.java).
+
+`Ctrl-C` (or `kill -TERM`) shuts the server down cleanly via the JVM shutdown hook. On macOS the default port may collide with `upnotifyp`; override with `-Djsmb.port=4446` (and matching `SAMBA_PORT=4446` for the interop wrapper) if you hit a bind failure.
+
+### Manual interop testing with Samba's `smbclient`
+
+A Podman-hosted wrapper for driving jSMB from Samba's reference client lives under [`interop/`](interop/). Both the wrapper and the server default to port **4445**, so no extra flags are needed. See [`interop/README.md`](interop/README.md) for the full walk-through; the short form is:
+
+```bash
+# Terminal 1 — start jSMB
+./mvnw verify -Prun
+
+# Terminal 2 — run a scenario
+./interop/run-samba-scenario.sh smoke.txt
+```
 
 ### Wireshark packet captures
 
@@ -120,33 +144,6 @@ The session id here is in **little-endian** wire order — that's what the Wires
 The human-readable summary line just above uses the big-endian rendering that Wireshark's packet-details view shows for the same field.
 
 > ⚠️ `Config.DEBUG_ENCRYPTION` leaks secret key material to the log by design. Only enable it in deployments you control, while actively analysing captures — never ship it to production.
-
-### Capturing plaintext instead
-
-If you prefer to skip decryption entirely, start the server with a flag set that omits both `Config.ENCRYPT_DATA` and `Config.REJECT_UNENCRYPTED_ACCESS`:
-
-```java
-import org.cryptomator.jsmb.Config;
-
-try (var server = TcpServer.start(4445, Config.create(Config.REQUIRE_MESSAGE_SIGNING))) {
-    server.registerShare("data", new MySmbShare());
-}
-```
-
-Clients must also be configured to not require encryption (e.g. `smbj` `SmbConfig.builder().withEncryptData(false)`).
-Note that this disables the confidentiality guarantee for every connection and is only safe on a loopback interface during development.
-
-### Manual interop testing with Samba's `smbclient`
-
-A separate harness for driving jSMB from Samba's reference client lives under [`interop/`](interop/). It's gated on the `samba-harness` Maven profile (plain `mvn test` and CI skip it), and ships a Podman-hosted wrapper that runs scenarios by name, from a file, or from a heredoc. See [`interop/README.md`](interop/README.md) for the full walk-through; the short form is:
-
-```bash
-# Terminal 1 — start jSMB
-mvn verify -Psamba-harness
-
-# Terminal 2 — run a scenario
-./interop/run-samba-scenario.sh smoke.txt
-```
 
 ## License
 

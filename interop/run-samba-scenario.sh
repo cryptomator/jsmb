@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run an smbclient scenario against a running jSMB harness.
 #
-# Start jSMB first in another terminal:   mvn verify -Psamba-harness
+# Start jSMB first in another terminal:   ./mvnw verify -Psamba-harness
 #
 # Usage (from anywhere):
 #   interop/run-samba-scenario.sh                      # read commands from stdin
@@ -17,7 +17,7 @@
 # input is piped to smbclient, so scenario files can carry comments.
 #
 # Tunables (env vars):
-#   SAMBA_PORT   (default 4446)                         # port the jSMB harness listens on
+#   SAMBA_PORT   (default 4445)                         # port the jSMB harness listens on
 #   SAMBA_SHARE  (default data)                         # share name registered by the harness
 #   SAMBA_USER   (default DOMAIN/user%password)         # smbclient -U spec
 #   SAMBA_DEBUG  (default 3)                            # smbclient -d level (0-10)
@@ -27,7 +27,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCENARIO_DIR="$SCRIPT_DIR/scenarios"
-PORT="${SAMBA_PORT:-4446}"
+PORT="${SAMBA_PORT:-4445}"
 SHARE="${SAMBA_SHARE:-data}"
 USER_SPEC="${SAMBA_USER:-DOMAIN/user%password}"
 DEBUG_LEVEL="${SAMBA_DEBUG:-3}"
