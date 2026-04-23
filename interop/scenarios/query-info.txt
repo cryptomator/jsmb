@@ -1,0 +1,9 @@
+# Exercises QUERY_INFO (M7): file-level (FileAllInformation via `allinfo`) and filesystem-level
+# (FileFsFullSizeInformation / FileFsAttributeInformation via the free-space footer `dir` prints).
+# Note: `put` would require WRITE (M9), so we stick to directories that `mkdir` can create.
+mkdir query-info
+mkdir query-info\nested
+dir
+allinfo query-info
+allinfo query-info\nested
+exit

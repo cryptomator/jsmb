@@ -20,6 +20,13 @@ public class Open {
 	public final TreeConnect treeConnect;
 
 	/**
+	 * Normalised path relative to the share root, as passed to {@code SmbShare.open(...)}.
+	 * Forward-slash delimited (translation from backslashes happens in the CREATE handler).
+	 * Empty string for the share root.
+	 */
+	public final String path;
+
+	/**
 	 * Cached snapshot of the directory listing for the current {@code QUERY_DIRECTORY} enumeration.
 	 * {@code null} until the first {@code QUERY_DIRECTORY} on this Open; repopulated on
 	 * {@code SL_RESTART_SCAN} / {@code SL_REOPEN}.
@@ -31,10 +38,11 @@ public class Open {
 
 	// TODO: populate more Per-Open fields as later milestones need them (oplock, lease, granted access, etc.)
 
-	public Open(FileId fileId, SmbOpen backend, Session session, TreeConnect treeConnect) {
+	public Open(FileId fileId, SmbOpen backend, Session session, TreeConnect treeConnect, String path) {
 		this.fileId = fileId;
 		this.backend = backend;
 		this.session = session;
 		this.treeConnect = treeConnect;
+		this.path = path;
 	}
 }

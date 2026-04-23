@@ -83,7 +83,7 @@ public record CreateHandler(Connection connection) {
 		}
 
 		var fileId = backend.fileId();
-		session.openTable.put(fileId, new Open(fileId, backend, session, treeConnect));
+		session.openTable.put(fileId, new Open(fileId, backend, session, treeConnect, name));
 		LOG.debug("CREATE '{}' → fileId={}  action={}", name, fileId, disposition);
 
 		var header = buildResponseHeader(request, Command.CREATE, treeConnect.treeId());
