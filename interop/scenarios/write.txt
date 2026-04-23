@@ -1,0 +1,10 @@
+# Exercises M9 (WRITE + FLUSH). Stages a local file inside the smbclient container via a shell
+# escape, then `put`s it to the share. The round-trip then `get`s it back so the scenario
+# self-validates — any divergence between the written and read bytes surfaces as a client-side
+# error (smbclient compares by size; full content check is left to the smbj-driven WriteIT).
+# Requires milestones: M4 (TREE_CONNECT), M5 (CREATE / CLOSE), M8 (READ), M9 (WRITE / FLUSH).
+!sh -c 'echo "hello-from-smbclient" > /tmp/payload.txt'
+put /tmp/payload.txt scripted-write.txt
+get scripted-write.txt /tmp/roundtrip.txt
+!sh -c 'diff /tmp/payload.txt /tmp/roundtrip.txt && echo PAYLOAD_MATCH'
+exit

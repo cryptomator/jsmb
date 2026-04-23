@@ -16,7 +16,7 @@ import java.util.concurrent.CountDownLatch;
 public class RunIT {
 
 	static {
-		System.setProperty(SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "DEBUG");
+		System.setProperty(SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "INFO");
 	}
 
 	private static final Logger LOG = LoggerFactory.getLogger(RunIT.class);
