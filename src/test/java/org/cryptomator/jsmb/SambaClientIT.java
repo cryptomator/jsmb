@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.simple.SimpleLogger;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 
@@ -18,7 +19,7 @@ import java.util.concurrent.CountDownLatch;
  * Augments the {@code smbj}-based integration tests — gated on the {@code samba.harness}
  * system property, which the {@code samba-harness} Maven profile sets for you:
  * <pre>{@code
- *     mvn test -Psamba-harness
+ *     mvn verify -Psamba-harness
  * }</pre>
  * A plain {@code mvn test} skips this class. In a second terminal run the {@code podman run}
  * command this test logs at startup; hit Enter / {@code Ctrl-D} to shut the server down.
@@ -44,12 +45,13 @@ public class SambaClientIT {
 
 	@Test
 	@EnabledIfSystemProperty(named = "samba.harness", matches = "true",
-			disabledReason = "run with `mvn test -Psamba-harness` to drive jSMB with Samba's smbclient from a Podman container")
+			disabledReason = "run with `mvn verify -Psamba-harness` to drive jSMB with Samba's smbclient from a Podman container")
 	@DisplayName("Run TcpServer on port 4446 for interactive Samba smbclient testing")
 	public void test() {
 		var config = Config.create(Config.ENCRYPT_DATA, Config.REQUIRE_MESSAGE_SIGNING, Config.DEBUG_ENCRYPTION);
 		try (var server = TcpServer.start(PORT, config)) {
 			server.registerShare(SHARE_NAME, new NioShare(shareRoot));
+			seedFixtures();
 			logInvocationHelp(server.getLocalPort());
 
 			// wait for SIGTERM:
@@ -63,6 +65,14 @@ public class SambaClientIT {
 			Thread.currentThread().interrupt();
 			LOG.error("Thread interrupted", e);
 		}
+	}
+
+	/**
+	 * Drops a handful of files into the share root so READ-dependent scenarios (e.g. {@code get}) have something to
+	 * fetch before WRITE (M9) lands and lets {@code smbclient} do its own {@code put}.
+	 */
+	private static void seedFixtures() throws IOException {
+		Files.writeString(shareRoot.resolve("greeting.txt"), "Hello from jSMB! This is a pre-seeded fixture for the READ scenario.\n");
 	}
 
 	private static void logInvocationHelp(int port) {

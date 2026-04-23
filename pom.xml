@@ -210,6 +210,27 @@
 					</argLine>
 				</configuration>
 			</plugin>
+			<!-- *IT classes run in the `integration-test` / `verify` phases via failsafe. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<version>3.3.1</version>
+				<configuration>
+					<argLine>
+						-javaagent:${net.bytebuddy:byte-buddy-agent:jar}
+						--enable-preview
+						--add-reads org.cryptomator.jsmb=java.security.sasl
+					</argLine>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 
@@ -283,7 +304,7 @@
 		from Samba's smbclient running in a Podman container. See the "Manual interop testing with
 		Samba's smbclient" section of README.md for the podman run commands.
 
-		Enable with: mvn test -Psamba-harness
+		Enable with: mvn verify -Psamba-harness
 		-->
 		<profile>
 			<id>samba-harness</id>
@@ -292,6 +313,13 @@
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<skip>true</skip>
+						</configuration>
+					</plugin>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-failsafe-plugin</artifactId>
 						<configuration>
 							<test>SambaClientIT</test>
 							<systemPropertyVariables>

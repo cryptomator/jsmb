@@ -27,7 +27,7 @@ The first invocation of `run-samba-scenario.sh` builds a small local image (alpi
 
 1. **Start the harness** in a terminal (port 4446, encryption + signing + `DEBUG_ENCRYPTION` enabled, share `data` backed by a fresh `@TempDir`, blocks on `stdin`). Port 4446 avoids the usual 4445 collision with macOS's `upnotifyp`:
    ```bash
-   mvn test -Psamba-harness
+   mvn verify -Psamba-harness
    ```
 2. **In another terminal, run a scenario against it.** The wrapper auto-selects Linux (`--network host`) vs. macOS/Windows (`host.containers.internal`) networking:
    ```bash
@@ -66,7 +66,7 @@ The `smbclient` command set is documented in `man smbclient`; common commands ar
 
 ```bash
 # 1. Background the harness.
-mvn -q test -Psamba-harness > /tmp/jsmb-harness.log 2>&1 &
+mvn -q verify -Psamba-harness > /tmp/jsmb-harness.log 2>&1 &
 
 # 2. Wait until the server starts listening (usually ≤ 1–2 s on a warm build).
 until lsof -iTCP:4446 -sTCP:LISTEN >/dev/null 2>&1; do sleep 1; done
@@ -108,7 +108,7 @@ Some `smbclient` probes will error out until the corresponding server milestones
 
 - Named-pipe RPC on `IPC$` (e.g. `SRVSVC`): requires a pipe dispatcher (not on the roadmap).
 - Directory listing (`ls`): requires **M6** (`QUERY_DIRECTORY`).
-- Read / write (`get`, `put`): require **M8** / **M9**.
+- Write (`put`): requires **M9**.
 - Rename / delete (`rename`, `rm`, `rmdir`): require **M10** (`SET_INFO`).
 - Change notifications: returns `STATUS_NOT_SUPPORTED` by design.
 

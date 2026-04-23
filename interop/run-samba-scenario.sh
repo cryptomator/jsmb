@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run an smbclient scenario against a running jSMB harness.
 #
-# Start jSMB first in another terminal:   mvn test -Psamba-harness
+# Start jSMB first in another terminal:   mvn verify -Psamba-harness
 #
 # Usage (from anywhere):
 #   interop/run-samba-scenario.sh                      # read commands from stdin

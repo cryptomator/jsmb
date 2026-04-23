@@ -142,7 +142,7 @@ A separate harness for driving jSMB from Samba's reference client lives under [`
 
 ```bash
 # Terminal 1 — start jSMB
-mvn test -Psamba-harness
+mvn verify -Psamba-harness
 
 # Terminal 2 — run a scenario
 ./interop/run-samba-scenario.sh smoke.txt

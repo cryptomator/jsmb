@@ -58,7 +58,7 @@ jobs:
           cache: 'maven'
       - name: Start jSMB harness
         run: |
-          ./mvnw -B -q test -Psamba-harness --no-transfer-progress > /tmp/jsmb-harness.log 2>&1 &
+          ./mvnw -B -q verify -Psamba-harness --no-transfer-progress > /tmp/jsmb-harness.log 2>&1 &
           echo "HARNESS_MVN_PID=$!" >> "$GITHUB_ENV"
       - name: Wait for port 4446
         run: |
