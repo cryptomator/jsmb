@@ -1,0 +1,74 @@
+name: Build
+on:
+  push:
+  pull_request_target:
+    types: [labeled]
+
+env:
+  JAVA_VERSION: 25
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Required for checkout
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'maven'
+      - name: Build and Test
+        run: ./mvnw -B verify --no-transfer-progress
+
+  interop:
+    name: Samba Interop (${{ matrix.scenario }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Required for checkout
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [smoke.txt, mkdir.txt, ls.txt, query-paginated.txt, query-info.txt]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'maven'
+      - name: Start jSMB harness
+        run: |
+          ./mvnw -B -q test -Psamba-harness --no-transfer-progress > /tmp/jsmb-harness.log 2>&1 &
+          echo "HARNESS_MVN_PID=$!" >> "$GITHUB_ENV"
+      - name: Wait for port 4446
+        run: |
+          for i in $(seq 1 50); do
+            if lsof -iTCP:4446 -sTCP:LISTEN >/dev/null 2>&1; then
+              echo "jSMB harness is listening on 4446 (after ${i}s)"
+              exit 0
+            fi
+            sleep 0.2
+          done
+          echo "jSMB harness did not start listening on 4446 within 10s" >&2
+          cat /tmp/jsmb-harness.log >&2
+          exit 1
+      - name: Run scenario ${{ matrix.scenario }}
+        run: ./interop/run-samba-scenario.sh ${{ matrix.scenario }}
+      - name: Stop jSMB harness
+        if: always()
+        run: |
+          PID=$(lsof -iTCP:4446 -sTCP:LISTEN -t 2>/dev/null || true)
+          if [ -n "$PID" ]; then
+            kill -TERM "$PID" || true
+          fi
+          wait "${HARNESS_MVN_PID:-}" 2>/dev/null || true
+      - name: Upload harness log
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: harness-log-${{ matrix.scenario }}
+          path: /tmp/jsmb-harness.log
