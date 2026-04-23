@@ -19,4 +19,16 @@ class ASN1NodeTest {
 		Assertions.assertArrayEquals(original, serialized);
 	}
 
+	@Test
+	@DisplayName("A blob whose declared length exceeds the buffer surfaces as IllegalArgumentException")
+	public void overLongDeclaredLengthIsRejected() {
+		// Tag 0x30 (SEQUENCE, constructed) with a declared length of 84 bytes but only 2 bytes of content.
+		// Before the bounds check this used to throw IndexOutOfBoundsException from ByteBuffer.get,
+		// killing the connection-handling thread.
+		byte[] malformed = {0x30, 0x54, 0x01, 0x02};
+
+		Assertions.assertThrows(IllegalArgumentException.class,
+				() -> ASN1Node.parse(ByteBuffer.wrap(malformed)));
+	}
+
 }

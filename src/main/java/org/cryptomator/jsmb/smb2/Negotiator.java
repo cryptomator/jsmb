@@ -248,16 +248,28 @@ public record Negotiator(TcpServer server, Connection connection) {
 		header.sessionId(session.sessionId);
 
 		try {
-			var gssToken = NegotiationToken.parse(request.securityBuffer()); // security buffer MUST contain a GSS output token, see https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/8b90c335-5a64-4238-9813-84bd734599eb
+			// MS-SMB2 delegates the security buffer to GSS-API (§3.3.5.5.3 "Handling GSS-API
+			// Authentication"). Whether the GSS layer accepts a raw NTLMSSP NEGOTIATE_MESSAGE in place of
+			// a SPNEGO-wrapped one is an implementation detail of Windows SSPI / the GSS stack — not a
+			// behaviour mandated by MS-SMB2 itself. In practice the Linux kernel cifs client with
+			// `sec=ntlmssp` and Samba rely on servers accepting both, so we mirror that: peek at the
+			// first 8 bytes for the NTLMSSP signature and skip the SPNEGO unwrap/wrap when present. Both
+			// paths feed the same NtlmSession state machine.
+			var securityBuffer = request.securityBuffer();
+			boolean rawNtlm = isRawNtlmssp(securityBuffer);
+			byte[] inboundNtlm = rawNtlm ? securityBuffer : NegotiationToken.parse(securityBuffer).token();
+
 			switch (session.ntlmSession) {
 				case NtlmSession.Initial s -> {
-					var awaitingAuthentication = s.negotiate(gssToken.token());
-					var negTokenResp = NegTokenResp.acceptIncomplete(awaitingAuthentication.serverChallenge());
+					var awaitingAuthentication = s.negotiate(inboundNtlm);
+					byte[] outboundSecurityBuffer = rawNtlm
+							? awaitingAuthentication.serverChallenge()
+							: NegTokenResp.acceptIncomplete(awaitingAuthentication.serverChallenge()).negTokenResp().serialize();
 					header.status(NTStatus.STATUS_MORE_PROCESSING_REQUIRED);
 					var response = new SessionSetupResponse(header.build());
 					session.ntlmSession = awaitingAuthentication;
 
-					var fullResponse = response.withSecurityBuffer(negTokenResp.negTokenResp().serialize());
+					var fullResponse = response.withSecurityBuffer(outboundSecurityBuffer);
 					var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
 					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
 					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, fullResponse.serialize()));
@@ -271,7 +283,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 					// sent a different user or domain than the one this server was started with, the hash mismatches
 					// and authenticate() throws AuthenticationFailedException — no explicit user-lookup needed.
 					var creds = connection.global.credentials;
-					var authenticated = s.authenticate(gssToken.token(), creds.user(), creds.password(), creds.domain());
+					var authenticated = s.authenticate(inboundNtlm, creds.user(), creds.password(), creds.domain());
 					header.status(NTStatus.STATUS_SUCCESS);
 					header.creditResponse((char) 8192);
 					// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654
@@ -294,19 +306,37 @@ public record Negotiator(TcpServer server, Connection connection) {
 					if (session.encryptData) {
 						response.sessionFlags(SessionSetupResponse.SMB2_SESSION_FLAG_ENCRYPT_DATA);
 					}
-					response = response.withSecurityBuffer(NegTokenResp.acceptCompleted().negTokenResp().serialize());
+					// Raw NTLMSSP has no completion token — an empty SecurityBuffer alongside STATUS_SUCCESS
+					// is the correct ack. SPNEGO peers get the usual NegTokenResp{accept_completed}.
+					byte[] outboundSecurityBuffer = rawNtlm
+							? new byte[0]
+							: NegTokenResp.acceptCompleted().negTokenResp().serialize();
+					response = response.withSecurityBuffer(outboundSecurityBuffer);
 					assert Objects.equals(connection.dialect, "3.1.1");
 					return response.sign(session.signingKey, connection); // step 12
 				}
 				case NtlmSession.Authenticated _ -> throw new IllegalStateException("Session already authenticated");
 			}
 		} catch (IllegalArgumentException e) {
-			// TODO fail with status SEC_E_INVALID_TOKEN
-			throw new UnsupportedOperationException("Not yet implemented", e);
+			// Malformed SPNEGO token / un-parseable NTLMSSP blob — respond with STATUS_INVALID_PARAMETER
+			// rather than letting the exception tear down the connection-handling thread.
+			LOG.debug("Malformed security blob in SESSION_SETUP", e);
+			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
 		} catch (NTStatusException e) {
 			// TODO log?
 			return ErrorResponse.create(request, e.status);
 		}
+	}
+
+	/** MS-NLMP 2.2.1 {@code Signature}: every NTLMSSP message begins with the 8-byte magic {@code "NTLMSSP\0"}. */
+	private static final byte[] NTLMSSP_MAGIC = {'N', 'T', 'L', 'M', 'S', 'S', 'P', 0};
+
+	private static boolean isRawNtlmssp(byte[] blob) {
+		if (blob.length < NTLMSSP_MAGIC.length) return false;
+		for (int i = 0; i < NTLMSSP_MAGIC.length; i++) {
+			if (blob[i] != NTLMSSP_MAGIC[i]) return false;
+		}
+		return true;
 	}
 
 	private byte[] genSalt() {

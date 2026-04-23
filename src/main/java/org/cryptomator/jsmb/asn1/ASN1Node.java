@@ -96,6 +96,13 @@ public sealed interface ASN1Node permits ASN1Node.ASN1Primitive, ASN1Node.ASN1Co
 			length = value;
 		}
 
+		// bounds check: declared length must fit in the remaining buffer. An over-long length is how
+		// garbage blobs (e.g. a raw NTLMSSP message misrouted into the SPNEGO parser) would otherwise
+		// surface as IndexOutOfBoundsException from the underlying ByteBuffer — killing the thread.
+		if (length < 0 || length > data.limit() - offset) {
+			throw new IllegalArgumentException("Declared ASN.1 length " + length + " exceeds remaining buffer (" + (data.limit() - offset) + " bytes)");
+		}
+
 		// extract content:
 		if ((identifier[0] & 0b0010_0000) == 0b0010_0000) {
 			// constructed
