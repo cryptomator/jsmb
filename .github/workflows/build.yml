@@ -46,14 +46,14 @@ jobs:
           echo "HARNESS_MVN_PID=$!" >> "$GITHUB_ENV"
       - name: Wait for port 4446
         run: |
-          for i in $(seq 1 50); do
+          for i in $(seq 1 30); do
             if lsof -iTCP:4446 -sTCP:LISTEN >/dev/null 2>&1; then
               echo "jSMB harness is listening on 4446 (after ${i}s)"
               exit 0
             fi
-            sleep 0.2
+            sleep 1
           done
-          echo "jSMB harness did not start listening on 4446 within 10s" >&2
+          echo "jSMB harness did not start listening on 4446 within 30s" >&2
           cat /tmp/jsmb-harness.log >&2
           exit 1
       - name: Run scenario ${{ matrix.scenario }}
