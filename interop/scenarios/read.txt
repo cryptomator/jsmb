@@ -1,0 +1,5 @@
+# Exercises M8 (READ). The harness pre-seeds `greeting.txt` (see `SambaClientIT.seedFixtures`), so
+# `get` triggers CREATE + READ + CLOSE end-to-end. `put` would require WRITE (M9), which is why we
+# rely on harness-side seeding instead of `put`-then-`get` in the scenario itself.
+get greeting.txt
+exit

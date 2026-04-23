@@ -28,6 +28,8 @@ import org.cryptomator.jsmb.smb2.crypto.MessageEncryptor;
 import org.cryptomator.jsmb.smb2.crypto.TransformHeader;
 import org.cryptomator.jsmb.smb2.info.QueryInfoHandler;
 import org.cryptomator.jsmb.smb2.info.QueryInfoRequest;
+import org.cryptomator.jsmb.smb2.io.ReadHandler;
+import org.cryptomator.jsmb.smb2.io.ReadRequest;
 import org.cryptomator.jsmb.smb2.ioctl.IoctlHandler;
 import org.cryptomator.jsmb.smb2.ioctl.IoctlRequest;
 import org.cryptomator.jsmb.smb2.query.QueryDirectoryHandler;
@@ -64,6 +66,7 @@ class TcpConnection implements Runnable {
 	private final CreateHandler createHandler;
 	private final QueryDirectoryHandler queryDirectoryHandler;
 	private final QueryInfoHandler queryInfoHandler;
+	private final ReadHandler readHandler;
 	private final MessageEncryptor encryptor = new MessageEncryptor();
 
 	public TcpConnection(TcpServer server, Socket socket) {
@@ -77,6 +80,7 @@ class TcpConnection implements Runnable {
 		this.createHandler = new CreateHandler(connection);
 		this.queryDirectoryHandler = new QueryDirectoryHandler(connection);
 		this.queryInfoHandler = new QueryInfoHandler(server, connection);
+		this.readHandler = new ReadHandler(connection);
 	}
 
 	@Override
@@ -169,6 +173,7 @@ class TcpConnection implements Runnable {
 				case CloseRequest request -> createHandler.close(request);
 				case QueryDirectoryRequest request -> queryDirectoryHandler.query(request);
 				case QueryInfoRequest request -> queryInfoHandler.query(request);
+				case ReadRequest request -> readHandler.read(request);
 				case UnhandledRequest request -> {
 					LOG.debug("Command 0x{} not implemented, replying STATUS_NOT_SUPPORTED", Integer.toHexString(request.header().command()));
 					yield ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);

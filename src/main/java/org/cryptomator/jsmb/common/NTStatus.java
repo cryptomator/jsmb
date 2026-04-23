@@ -13,6 +13,7 @@ public interface NTStatus {
 	int STATUS_REQUEST_NOT_ACCEPTED = 0xC00000D0;
 
 	// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb/6ab6ca20-b404-41fd-b91a-2ed39e3762ea
+	int STATUS_END_OF_FILE = 0xC0000011;
 	int STATUS_MORE_PROCESSING_REQUIRED = 0xC0000016;
 	int STATUS_SMB_BAD_COMMAND = 0x00160002;
 	int STATUS_INVALID_PARAMETER = 0xC000000D;
