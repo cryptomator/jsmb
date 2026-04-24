@@ -1,6 +1,6 @@
 package org.cryptomator.jsmb.smb2.info;
 
-import org.cryptomator.jsmb.TcpServer;
+import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.FileBasicInfo;
 import org.cryptomator.jsmb.share.FileStandardInfo;
@@ -26,7 +26,7 @@ import java.io.IOException;
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5a5bca30-3b3e-4b0b-a13a-90a36dc62c8b">3.3.5.20 Receiving an SMB2 QUERY_INFO Request</a>
  */
-public record QueryInfoHandler(TcpServer server, Connection connection) {
+public record QueryInfoHandler(Server server, Connection connection) {
 
 	private static final Logger LOG = LoggerFactory.getLogger(QueryInfoHandler.class);
 

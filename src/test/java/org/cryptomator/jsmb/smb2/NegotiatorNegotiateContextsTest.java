@@ -2,7 +2,7 @@ package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
-import org.cryptomator.jsmb.TcpServer;
+import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.smb2.negotiate.CompressionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.EncryptionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.NegotiateContext;
@@ -33,12 +33,12 @@ import java.util.Set;
  */
 class NegotiatorNegotiateContextsTest {
 
-	private TcpServer server;
+	private Server server;
 	private Negotiator negotiator;
 
 	@BeforeEach
 	void setUp() throws IOException {
-		server = TcpServer.start(0, Config.create(), new Credentials("DOMAIN", "user", "password"));
+		server = Server.start(0, Config.create(), new Credentials("DOMAIN", "user", "password"));
 		var connection = new Connection(server.global);
 		negotiator = new Negotiator(server, connection);
 	}

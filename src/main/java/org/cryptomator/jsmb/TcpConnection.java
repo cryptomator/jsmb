@@ -64,7 +64,7 @@ class TcpConnection implements Runnable {
 
 	private static final Logger LOG = LoggerFactory.getLogger(TcpConnection.class);
 
-	private final TcpServer server;
+	private final Server server;
 	private final Socket socket;
 	private final Connection connection;
 	private final Negotiator negotiator;
@@ -79,7 +79,7 @@ class TcpConnection implements Runnable {
 	private final WriteHandler writeHandler;
 	private final MessageEncryptor encryptor = new MessageEncryptor();
 
-	public TcpConnection(TcpServer server, Socket socket) {
+	public TcpConnection(Server server, Socket socket) {
 		this.server = server;
 		this.socket = socket;
 		this.connection = new Connection(server.global);

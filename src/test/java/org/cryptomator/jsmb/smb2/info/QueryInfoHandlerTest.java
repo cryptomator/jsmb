@@ -1,7 +1,7 @@
 package org.cryptomator.jsmb.smb2.info;
 
 import org.cryptomator.jsmb.Credentials;
-import org.cryptomator.jsmb.TcpServer;
+import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.nio.NioShare;
@@ -33,7 +33,7 @@ class QueryInfoHandlerTest {
 	@TempDir
 	Path shareRoot;
 
-	private TcpServer server;
+	private Server server;
 	private Session session;
 	private TreeConnect treeConnect;
 	private QueryInfoHandler handler;
@@ -42,7 +42,7 @@ class QueryInfoHandlerTest {
 	@BeforeEach
 	void setUp() throws Exception {
 		// spin up a real TcpServer so we have a populated startTime
-		server = TcpServer.start(0, new Credentials("DOMAIN", "user", "password"));
+		server = Server.start(0, new Credentials("DOMAIN", "user", "password"));
 		var global = server.global;
 		var share = new NioShare(shareRoot);
 		global.shares.put("data", share);

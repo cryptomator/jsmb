@@ -1,6 +1,6 @@
 package org.cryptomator.jsmb.smb2;
 
-import org.cryptomator.jsmb.TcpServer;
+import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.asn1.NegTokenInit2;
 import org.cryptomator.jsmb.asn1.NegTokenResp;
 import org.cryptomator.jsmb.asn1.NegotiationToken;
@@ -41,7 +41,7 @@ import static org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities.SMB2_GLOBAL
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/e545352b-9f2b-4c5e-9350-db46e4f6755e">Receiving an SMB2 SESSION_SETUP Request</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/c083583f-1a8f-4afe-a742-6ee08ffeb8cf">NTLM Over SMB</a>
  */
-public record Negotiator(TcpServer server, Connection connection) {
+public record Negotiator(Server server, Connection connection) {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Negotiator.class);
 

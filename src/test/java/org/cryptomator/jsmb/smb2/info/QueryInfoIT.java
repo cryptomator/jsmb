@@ -8,7 +8,7 @@ import com.hierynomus.smbj.auth.AuthenticationContext;
 import com.hierynomus.smbj.connection.Connection;
 import com.hierynomus.smbj.session.Session;
 import com.hierynomus.smbj.share.DiskShare;
-import org.cryptomator.jsmb.TcpServer;
+import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.share.nio.NioShare;
 import org.junit.jupiter.api.AfterAll;
@@ -33,7 +33,7 @@ public class QueryInfoIT {
 	@TempDir
 	static Path shareRoot;
 
-	private TcpServer server;
+	private Server server;
 	private SMBClient client;
 	private Connection connection;
 	private Session session;
@@ -41,7 +41,7 @@ public class QueryInfoIT {
 
 	@BeforeAll
 	public void setup() throws IOException {
-		server = TcpServer.start(0, new Credentials("DOMAIN", "user", "password"));
+		server = Server.start(0, new Credentials("DOMAIN", "user", "password"));
 		server.registerShare("data", new NioShare(shareRoot));
 		var config = SmbConfig.builder()
 				.withMultiProtocolNegotiate(true)

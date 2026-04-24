@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
+import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.share.SmbShare;
 
 import java.util.HashMap;
@@ -30,7 +31,7 @@ public class Global {
 
 	/**
 	 * The single identity this server accepts for NTLMv2 session setup. Set once at construction via
-	 * {@link org.cryptomator.jsmb.TcpServer#start(int, Set, Credentials)}.
+	 * {@link Server#start(int, Set, Credentials)}.
 	 */
 	public final Credentials credentials;
 

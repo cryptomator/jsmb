@@ -1,7 +1,6 @@
 package org.cryptomator.jsmb;
 
 import com.hierynomus.mserref.NtStatus;
-import org.cryptomator.jsmb.Credentials;
 import com.hierynomus.mssmb2.SMBApiException;
 import com.hierynomus.smbj.SMBClient;
 import com.hierynomus.smbj.SmbConfig;
@@ -18,12 +17,12 @@ import java.io.IOException;
 
 public class ConnectIT {
 
-	private TcpServer server;
+	private Server server;
 	private SMBClient client;
 
 	@BeforeEach
 	public void setup() throws IOException {
-		server = TcpServer.start(0, new Credentials("DOMAIN", "user", "password"));
+		server = Server.start(0, new Credentials("DOMAIN", "user", "password"));
 		SmbConfig config = SmbConfig.builder()
 				.withMultiProtocolNegotiate(true) //
 				.withEncryptData(true) //

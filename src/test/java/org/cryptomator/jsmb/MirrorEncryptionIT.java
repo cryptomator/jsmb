@@ -10,7 +10,6 @@ import com.hierynomus.smbj.auth.AuthenticationContext;
 import com.hierynomus.smbj.connection.Connection;
 import com.hierynomus.smbj.io.ArrayByteChunkProvider;
 import com.hierynomus.smbj.session.Session;
-import org.cryptomator.jsmb.Config;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -33,7 +32,7 @@ public class MirrorEncryptionIT {
 
 	private static final SMB2FileId FILE_ID_NONE = new SMB2FileId(fillByte(8, (byte) 0xFF), fillByte(8, (byte) 0xFF));
 
-	private TcpServer server;
+	private Server server;
 	private SMBClient client;
 	private Connection connection;
 	private Session session;
@@ -41,7 +40,7 @@ public class MirrorEncryptionIT {
 	@BeforeAll
 	public void setup() throws IOException {
 		// Server intentionally has ENCRYPT_DATA disabled — normally responses would be plaintext.
-		server = TcpServer.start(0, Config.create(Config.REQUIRE_MESSAGE_SIGNING), new Credentials("DOMAIN", "user", "password"));
+		server = Server.start(0, Config.create(Config.REQUIRE_MESSAGE_SIGNING), new Credentials("DOMAIN", "user", "password"));
 		// Client forces encryption — every post-auth request will be wrapped in a TRANSFORM_HEADER.
 		var config = SmbConfig.builder()
 				.withMultiProtocolNegotiate(true)

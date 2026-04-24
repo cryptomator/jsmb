@@ -1,6 +1,6 @@
 package org.cryptomator.jsmb.smb1;
 
-import org.cryptomator.jsmb.TcpServer;
+import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.common.SMBMessage;
 import org.cryptomator.jsmb.smb2.Command;
@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/26646611-6a0f-4549-9c82-f9343e750a81">Receiving an SMB_COM_NEGOTIATE</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/bcd6d594-017b-47fc-8742-b7d847791783">SMB 2.1 or SMB 3.x Support</a>
  */
-public record SMB1Negotiator(TcpServer server, Connection connection) {
+public record SMB1Negotiator(Server server, Connection connection) {
 
 	private static final Logger LOG = LoggerFactory.getLogger(SMB1Negotiator.class);
 

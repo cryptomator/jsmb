@@ -2,7 +2,7 @@ package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
-import org.cryptomator.jsmb.TcpServer;
+import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.smb2.negotiate.EncryptionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.PreauthIntegrityCapabilities;
@@ -38,13 +38,13 @@ class NegotiatorRawNtlmTest {
 			00 00 00 00 2a 00 00 00   \
 			06 12 39 00 00 00 00 0f""");
 
-	private TcpServer server;
+	private Server server;
 	private Connection connection;
 	private Negotiator negotiator;
 
 	@BeforeEach
 	void setUp() throws IOException {
-		server = TcpServer.start(0, Config.create(), new Credentials("DOMAIN", "user", "password"));
+		server = Server.start(0, Config.create(), new Credentials("DOMAIN", "user", "password"));
 		connection = new Connection(server.global);
 		// Post-NEGOTIATE state — enough for the SESSION_SETUP branch that cares about preauth / cipher.
 		connection.dialect = "3.1.1";

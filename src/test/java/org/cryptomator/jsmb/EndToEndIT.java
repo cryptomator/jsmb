@@ -42,7 +42,7 @@ public class EndToEndIT {
 	@TempDir
 	static Path shareRoot;
 
-	private TcpServer server;
+	private Server server;
 	private SMBClient client;
 	private Connection connection;
 	private Session session;
@@ -50,7 +50,7 @@ public class EndToEndIT {
 
 	@BeforeAll
 	public void setup() throws IOException {
-		server = TcpServer.start(0, new Credentials("DOMAIN", "user", "password"));
+		server = Server.start(0, new Credentials("DOMAIN", "user", "password"));
 		server.registerShare("data", new NioShare(shareRoot));
 		var config = SmbConfig.builder()
 				.withMultiProtocolNegotiate(true)

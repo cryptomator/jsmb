@@ -17,7 +17,7 @@ import java.util.EnumSet;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Long-running launcher for an in-process {@link TcpServer}. Blocks until SIGTERM so external clients
+ * Long-running launcher for an in-process {@link Server}. Blocks until SIGTERM so external clients
  * (Samba {@code smbclient}, Finder, Explorer, {@code mount}, …) can drive the server. Gated on the
  * {@code jsmb.harness} system property so it never fires during a plain {@code ./mvnw test}.
  *
@@ -80,7 +80,7 @@ public class RunIT {
 				System.getProperty(PROP_PASSWORD, "password"));
 		var config = parseConfig(System.getProperty(PROP_CONFIG, "ENCRYPT_DATA,REQUIRE_MESSAGE_SIGNING,DEBUG_ENCRYPTION"));
 
-		try (var server = TcpServer.start(port, config, credentials)) {
+		try (var server = Server.start(port, config, credentials)) {
 			server.registerShare(shareName, new NioShare(shareRoot));
 			seedFixtures();
 

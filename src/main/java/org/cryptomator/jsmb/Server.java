@@ -1,6 +1,5 @@
 package org.cryptomator.jsmb;
 
-import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.share.SmbShare;
 import org.cryptomator.jsmb.smb2.Global;
 import org.slf4j.Logger;
@@ -15,9 +14,9 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class TcpServer implements AutoCloseable {
+public class Server implements AutoCloseable {
 
-	private static final Logger LOG = LoggerFactory.getLogger(TcpServer.class);
+	private static final Logger LOG = LoggerFactory.getLogger(Server.class);
 
 	private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 	private final ServerSocket serverSocket;
@@ -26,7 +25,7 @@ public class TcpServer implements AutoCloseable {
 	public final Instant startTime;
 	public final Global global;
 
-	private TcpServer(ServerSocket serverSocket, Set<Config> config, Credentials credentials) {
+	private Server(ServerSocket serverSocket, Set<Config> config, Credentials credentials) {
 		this.guid = UUID.randomUUID();
 		this.startTime = Instant.now();
 		this.serverSocket = serverSocket;
@@ -56,7 +55,7 @@ public class TcpServer implements AutoCloseable {
 	/**
 	 * Starts a new server with {@link Config#DEFAULT}.
 	 */
-	public static TcpServer start(int port, Credentials credentials) throws IOException {
+	public static Server start(int port, Credentials credentials) throws IOException {
 		return start(port, Config.DEFAULT, credentials);
 	}
 
@@ -73,10 +72,10 @@ public class TcpServer implements AutoCloseable {
 	 * @param flags       set of enabled toggles; an absent flag is disabled
 	 * @param credentials the single identity this server accepts; held for the server's lifetime
 	 */
-	public static TcpServer start(int port, Set<Config> flags, Credentials credentials) throws IOException {
+	public static Server start(int port, Set<Config> flags, Credentials credentials) throws IOException {
 		var serverSocket = new ServerSocket(port);
 		LOG.info("Server started on port {}", serverSocket.getLocalPort());
-		return new TcpServer(serverSocket, flags, credentials);
+		return new Server(serverSocket, flags, credentials);
 	}
 
 	private void acceptConnections() {

@@ -12,7 +12,7 @@ import com.hierynomus.smbj.auth.AuthenticationContext;
 import com.hierynomus.smbj.connection.Connection;
 import com.hierynomus.smbj.session.Session;
 import org.cryptomator.jsmb.Credentials;
-import org.cryptomator.jsmb.TcpServer;
+import org.cryptomator.jsmb.Server;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,14 +35,14 @@ public class IoctlIT {
 	private static final int FSCTL_UNRECOGNIZED = 0x00DEAD00;
 	private static final SMB2FileId FILE_ID_NONE = new SMB2FileId(fillByte(8, (byte) 0xFF), fillByte(8, (byte) 0xFF));
 
-	private TcpServer server;
+	private Server server;
 	private SMBClient client;
 	private Connection connection;
 	private Session session;
 
 	@BeforeAll
 	public void setup() throws IOException {
-		server = TcpServer.start(0, new Credentials("DOMAIN", "user", "password"));
+		server = Server.start(0, new Credentials("DOMAIN", "user", "password"));
 		var config = SmbConfig.builder()
 				.withMultiProtocolNegotiate(true)
 				.withEncryptData(true)
