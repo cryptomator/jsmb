@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2.info;
 
 import org.cryptomator.jsmb.share.FileBasicInfo;
 import org.cryptomator.jsmb.share.FileStandardInfo;
+import org.cryptomator.jsmb.util.InodeHash;
 import org.cryptomator.jsmb.util.WinFileTime;
 
 import java.nio.ByteBuffer;
@@ -72,7 +73,7 @@ public final class FileInfoWriter {
 	 */
 	static byte[] internalInfo(String openPath) {
 		var buf = alloc(8);
-		buf.putLong(pathHash(openPath));
+		buf.putLong(InodeHash.of(openPath));
 		return buf.array();
 	}
 
@@ -154,7 +155,7 @@ public final class FileInfoWriter {
 		buf.put((byte) (standard.directory() ? 1 : 0));
 		buf.putShort((short) 0);
 		// Internal
-		buf.putLong(pathHash(openPath));
+		buf.putLong(InodeHash.of(openPath));
 		// Ea
 		buf.putInt(0);
 		// Access
@@ -215,19 +216,6 @@ public final class FileInfoWriter {
 	private static String displayName(String openPath) {
 		if (openPath.isEmpty()) return "\\";
 		return "\\" + openPath.replace('/', '\\');
-	}
-
-	/**
-	 * Deterministic synthetic file-id derived from the path. Not collision-free, but the value
-	 * only surfaces in FileInternalInformation / FileAllInformation's IndexNumber field; a hash
-	 * matches the semantics of a filesystem inode well enough for a test-grade backend.
-	 */
-	private static long pathHash(String openPath) {
-		long h = 1125899906842597L;
-		for (int i = 0; i < openPath.length(); i++) {
-			h = 31 * h + openPath.charAt(i);
-		}
-		return h;
 	}
 
 	private static ByteBuffer alloc(int size) {

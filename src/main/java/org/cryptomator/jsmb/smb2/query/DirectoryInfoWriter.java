@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2.query;
 
 import org.cryptomator.jsmb.share.DirEntry;
+import org.cryptomator.jsmb.util.InodeHash;
 import org.cryptomator.jsmb.util.WinFileTime;
 
 import java.nio.ByteBuffer;
@@ -152,7 +153,7 @@ public final class DirectoryInfoWriter {
 		buf.put((byte) 0);               // Reserved1
 		buf.put(EMPTY_SHORT_NAME);
 		buf.putShort((short) 0);         // Reserved2
-		buf.putLong(fileReferenceNumber(entry));
+		buf.putLong(InodeHash.of(entry.name()));
 		buf.put(nameBytes);
 	}
 
@@ -163,7 +164,7 @@ public final class DirectoryInfoWriter {
 		buf.putInt(nameBytes.length);
 		buf.putInt(0);                   // EaSize
 		buf.putInt(0);                   // Reserved
-		buf.putLong(fileReferenceNumber(entry));
+		buf.putLong(InodeHash.of(entry.name()));
 		buf.put(nameBytes);
 	}
 
@@ -174,16 +175,4 @@ public final class DirectoryInfoWriter {
 		buf.put(nameBytes);
 	}
 
-	/**
-	 * Derives a deterministic 64-bit filesystem file reference number from the entry's name.
-	 * Not collision-free, but smbj and smbclient only use this for display; a hash is fine for a
-	 * test-grade backend.
-	 */
-	private static long fileReferenceNumber(DirEntry entry) {
-		long h = 1125899906842597L; // large prime seed
-		for (int i = 0; i < entry.name().length(); i++) {
-			h = 31 * h + entry.name().charAt(i);
-		}
-		return h;
-	}
 }
