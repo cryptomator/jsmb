@@ -36,10 +36,11 @@ public class Connection {
 	public char cipherId;
 	@Nullable
 	public SigningCapabilities.Algorithm signingAlgorithmId;
-	public char[] compressionIds;
-	public boolean supportsChainedCompression;
-	public char[] RDMATransformIds;
-	public boolean supportsMultiCredit;
+	public char[] compressionIds = new char[0];
+	public boolean supportsChainedCompression = false;
+	public char[] RDMATransformIds = new char[0];
+	public boolean supportsMultiCredit = false;
+	public boolean acceptTransportSecurity = false;
 
 	public char serverSecurityMode;
 

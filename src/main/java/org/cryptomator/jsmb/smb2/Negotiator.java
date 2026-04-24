@@ -78,9 +78,14 @@ public record Negotiator(TcpServer server, Connection connection) {
 		var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
 		connection.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(connection.preauthIntegrityHashValue, request.serialize()));
 
+		// Per MS-SMB2 3.3.5.4, each optional 3.1.1 negotiate context is processed iff the server-wide
+		// Is<Feature>Supported flag is TRUE; otherwise the server MUST ignore the request context. The
+		// response MUST include a matching context iff the request context was processed.
+
 		// SMB2_ENCRYPTION_CAPABILITIES
 		var requestedEncryptionCapabilities = request.negotiateContext(EncryptionCapabilities.class);
-		if (requestedEncryptionCapabilities != null) {
+		boolean processedEncryptionCapabilities = connection.global.isEncryptionSupported && requestedEncryptionCapabilities != null;
+		if (processedEncryptionCapabilities) {
 			var offered = UInt16.toSet(requestedEncryptionCapabilities.ciphers());
 			// prefer AES-256-GCM, fall back to AES-128-GCM (the AEAD ciphers we know we can encrypt/decrypt with the JDK)
 			if (offered.contains(EncryptionCapabilities.AES_256_GCM)) {
@@ -92,21 +97,40 @@ public record Negotiator(TcpServer server, Connection connection) {
 			}
 		}
 
-		// SMB2_COMPRESSION_CAPABILITIES TODO
-		connection.compressionIds = new char[0]; // not yet supported
+		// SMB2_COMPRESSION_CAPABILITIES
+		var requestedCompressionCapabilities = request.negotiateContext(CompressionCapabilities.class);
+		boolean processedCompressionCapabilities = connection.global.isCompressionSupported && requestedCompressionCapabilities != null;
+		if (processedCompressionCapabilities) {
+			// TODO intersect requestedCompressionCapabilities.compressionAlgorithms() with our supported set,
+			//  populate connection.compressionIds; honour the FLAG_CHAINED bit and set connection.supportsChainedCompression.
+			throw new UnsupportedOperationException("Compression not implemented — Global.isCompressionSupported must stay false until it is");
+		}
 
-		// SMB2_RDMA_TRANSFORM_CAPABILITIES TODO
-		connection.RDMATransformIds = new char[0]; // not yet supported
+		// SMB2_RDMA_TRANSFORM_CAPABILITIES
+		var requestedRDMATransformCapabilities = request.negotiateContext(RDMATransformCapabilities.class);
+		boolean processedRDMATransformCapabilities = connection.global.isRDMATransformSupported && requestedRDMATransformCapabilities != null;
+		if (processedRDMATransformCapabilities) {
+			// TODO intersect the client's RDMATransformIds with our supported set and populate connection.RDMATransformIds.
+			throw new UnsupportedOperationException("RDMA transforms not implemented — Global.isRDMATransformSupported must stay false until they are");
+		}
 
 		// SMB2_SIGNING_CAPABILITIES
 		var requestedSigningCapabilities = request.negotiateContext(SigningCapabilities.class);
-		if (request.negotiateContext(SigningCapabilities.class) != null) {
+		boolean processedSigningCapabilities = connection.global.isSigningCapabilitiesSupported && requestedSigningCapabilities != null;
+		if (processedSigningCapabilities) {
 			connection.signingAlgorithmId = UInt16.stream(requestedSigningCapabilities.signingAlgorithms()).anyMatch(c -> c == SigningCapabilities.Algorithm.AES_GMAC.getValue())
 					? SigningCapabilities.Algorithm.AES_GMAC
 					: SigningCapabilities.Algorithm.AES_CMAC;
 		}
 
-		// SMB2_TRANSPORT_CAPABILITIES TODO
+		// SMB2_TRANSPORT_CAPABILITIES
+		var requestedTransportCapabilities = request.negotiateContext(TransportCapabilities.class);
+		boolean processedTransportCapabilities = connection.global.isTransportCapabilitiesSupported && requestedTransportCapabilities != null;
+		if (processedTransportCapabilities) {
+			// TODO for QUIC transports: set connection.acceptTransportSecurity iff DisableEncryptionOverSecureTransport
+			//  is true AND the client set SMB2_ACCEPT_TRANSPORT_LEVEL_SECURITY in the Flags field.
+			throw new UnsupportedOperationException("Transport capabilities not implemented — Global.isTransportCapabilitiesSupported must stay false until they are");
+		}
 
 		// create response
 		var header = PacketHeader.builder();
@@ -130,30 +154,42 @@ public record Negotiator(TcpServer server, Connection connection) {
 		response.systemTime(WinFileTime.now());
 		response.serverStartTime(0); // as per spec
 
+		// MS-SMB2 3.3.5.4 "Building a NegotiateContextList": each optional context is emitted iff the server processed the matching request context.
+		// Preauth is the one unconditional entry (spec-mandated for 3.1.1).
 		List<NegotiateContext> contexts = new ArrayList<>();
 		// SMB2_PREAUTH_INTEGRITY_CAPABILITIES
 		var salt = genSalt();
 		contexts.add(PreauthIntegrityCapabilities.build(connection.preauthIntegrityHashId, salt));
-		// SMB2_ENCRYPTION_CAPABILITIES
-		if (requestedEncryptionCapabilities != null) {
+		// SMB2_ENCRYPTION_CAPABILITIES — echoed even with CipherId=0 (NO_COMMON_CIPHER), per spec, so the client can tell "encryption unsupported" from "no common cipher".
+		if (processedEncryptionCapabilities) {
 			contexts.add(EncryptionCapabilities.build(connection.cipherId));
 		}
-		// SMB2_COMPRESSION_CAPABILITIES
-		if (request.negotiateContext(CompressionCapabilities.class) != null) {
-			contexts.add(CompressionCapabilities.build(new char[]{CompressionCapabilities.ALG_NONE}, CompressionCapabilities.FLAG_NONE)); // compression not supported
+		// SMB2_COMPRESSION_CAPABILITIES — emitted iff we processed the request context. Per spec, when Connection.CompressionIds is empty the response MUST advertise CompressionAlgorithms={NONE}.
+		if (processedCompressionCapabilities) {
+			var algs = connection.compressionIds.length == 0
+					? new char[]{CompressionCapabilities.ALG_NONE}
+					: connection.compressionIds;
+			var flags = connection.supportsChainedCompression
+					? CompressionCapabilities.FLAG_CHAINED
+					: CompressionCapabilities.FLAG_NONE;
+			contexts.add(CompressionCapabilities.build(algs, flags));
 		}
-		// SMB2_RDMA_TRANSFORM_CAPABILITIES
-		if (request.negotiateContext(RDMATransformCapabilities.class) != null) {
-			contexts.add(RDMATransformCapabilities.build(new char[]{RDMATransformCapabilities.TRANSFORM_NONE})); // rdma transform not supported
+		// SMB2_RDMA_TRANSFORM_CAPABILITIES — emitted iff processed; empty Connection.RDMATransformIds means "no common transform", and per spec the wire response is RDMATransformIds={TRANSFORM_NONE}.
+		if (processedRDMATransformCapabilities) {
+			var transforms = connection.RDMATransformIds.length == 0
+					? new char[]{RDMATransformCapabilities.TRANSFORM_NONE}
+					: connection.RDMATransformIds;
+			contexts.add(RDMATransformCapabilities.build(transforms));
 		}
 		// SMB2_SIGNING_CAPABILITIES
-		if (request.negotiateContext(SigningCapabilities.class) != null) {
-			assert connection.signingAlgorithmId != null : "Never null if a SigningCapabilities NegotiateContext is present";
+		if (processedSigningCapabilities) {
+			assert connection.signingAlgorithmId != null : "Never null if a SigningCapabilities NegotiateContext was processed";
 			contexts.add(SigningCapabilities.build(connection.signingAlgorithmId.getValue()));
 		}
-		// SMB2_TRANSPORT_CAPABILITIES
-		if (request.negotiateContext(TransportCapabilities.class) != null) {
-			contexts.add(TransportCapabilities.build(0)); // no transport level security
+		// SMB2_TRANSPORT_CAPABILITIES — emitted iff processed. Flags reflect Connection.AcceptTransportSecurity.
+		if (processedTransportCapabilities) {
+			int flags = connection.acceptTransportSecurity ? TransportCapabilities.ACCEPT_TRANSPORT_LEVEL_SECURITY : 0;
+			contexts.add(TransportCapabilities.build(flags));
 		}
 
 		// gss token:

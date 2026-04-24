@@ -41,6 +41,16 @@ public class Global {
 
 	public final boolean isMultiChannelCapable = false;
 
+	// MS-SMB2 3.3.1.1 "IsXxxSupported" flags. Drive which SMB 3.1.1 negotiate contexts the server
+	// processes. If a flag is FALSE, §3.3.5.4 says the server MUST ignore the corresponding request
+	// context — and therefore MUST NOT emit a response context. Flipping one of these to TRUE is the
+	// single thing needed to enable that feature (plus the backing implementation, of course).
+	public final boolean isEncryptionSupported = true;
+	public final boolean isSigningCapabilitiesSupported = true;
+	public final boolean isCompressionSupported = false;
+	public final boolean isRDMATransformSupported = false;
+	public final boolean isTransportCapabilitiesSupported = false;
+
 	public Global(Set<Config> flags, Credentials credentials) {
 		this.credentials = credentials;
 		this.encryptData = flags.contains(Config.ENCRYPT_DATA);
