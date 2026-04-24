@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 import static org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
 
@@ -136,7 +135,7 @@ public record Negotiator(TcpServer server, Connection connection) {
 		var header = PacketHeader.builder();
 		header.creditCharge((char) 0);
 		header.status(NTStatus.STATUS_SUCCESS);
-		header.command(Command.NEGOATIATE.value());
+		header.command(Command.NEGOTIATE.value());
 		header.creditResponse((char) 1);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 		header.nextCommand(0);

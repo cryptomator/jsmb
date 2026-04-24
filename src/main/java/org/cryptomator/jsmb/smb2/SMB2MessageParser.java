@@ -39,7 +39,7 @@ public class SMB2MessageParser {
 		var header = new PacketHeader(headerSegment);
 		try {
 			return switch (Command.valueOf(header.command())) {
-				case NEGOATIATE -> new NegotiateRequest(header, bodySegment);
+				case NEGOTIATE -> new NegotiateRequest(header, bodySegment);
 				case SESSION_SETUP -> new SessionSetupRequest(header, bodySegment);
 				case LOGOFF -> new LogoffRequest(header, bodySegment);
 				case IOCTL -> new IoctlRequest(header, bodySegment);

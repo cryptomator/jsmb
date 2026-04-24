@@ -11,6 +11,8 @@ import java.nio.charset.StandardCharsets;
 /**
  * Serializes the MS-FSCC 2.4 file-level info classes that {@code QUERY_INFO} can return against an
  * open file or directory.
+ *
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/4718fc40-e539-4014-8e33-b675af74e3e1">MS-FSCC 2.4 File Information Classes</a>
  */
 public final class FileInfoWriter {
 
@@ -34,7 +36,10 @@ public final class FileInfoWriter {
 		};
 	}
 
-	/** MS-FSCC 2.4.7 — 40 bytes. */
+	/**
+	 * 40 bytes.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/16023025-8a78-492f-8b96-c873b042ac50">MS-FSCC 2.4.7 FileBasicInformation</a>
+	 */
 	static byte[] basicInfo(FileBasicInfo basic) {
 		var buf = alloc(40);
 		buf.putLong(WinFileTime.fromInstant(basic.creationTime()));
@@ -46,7 +51,10 @@ public final class FileInfoWriter {
 		return buf.array();
 	}
 
-	/** MS-FSCC 2.4.41 — 24 bytes. */
+	/**
+	 * 24 bytes.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/5afa7f66-619c-48f3-955f-68c4ece704ae">MS-FSCC 2.4.41 FileStandardInformation</a>
+	 */
 	static byte[] standardInfo(FileStandardInfo standard) {
 		var buf = alloc(24);
 		buf.putLong(standard.allocationSize());
@@ -58,44 +66,62 @@ public final class FileInfoWriter {
 		return buf.array();
 	}
 
-	/** MS-FSCC 2.4.20 — 8 bytes. Synthetic IndexNumber hashed from the path. */
+	/**
+	 * 8 bytes. Synthetic IndexNumber hashed from the path.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/7d796611-2fa5-41ac-8178-b6fea3a017b3">MS-FSCC 2.4.20 FileInternalInformation</a>
+	 */
 	static byte[] internalInfo(String openPath) {
 		var buf = alloc(8);
 		buf.putLong(pathHash(openPath));
 		return buf.array();
 	}
 
-	/** MS-FSCC 2.4.15 — 4 bytes, always zero (no extended attributes). */
+	/**
+	 * 4 bytes, always zero (no extended attributes).
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/db6cf109-ead8-441a-b29e-cb2032778b0f">MS-FSCC 2.4.15 FileEaInformation</a>
+	 */
 	static byte[] eaInfo() {
 		return new byte[4];
 	}
 
-	/** MS-FSCC 2.4.2 — 4 bytes. Reports {@code FILE_ALL_ACCESS} until actual access control lands. */
+	/**
+	 * 4 bytes. Reports {@code FILE_ALL_ACCESS} until actual access control lands.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/01cf43d2-deb3-40d3-a39b-9e68693d7c90">MS-FSCC 2.4.2 FileAccessInformation</a>
+	 */
 	static byte[] accessInfo() {
 		var buf = alloc(4);
 		buf.putInt(0x001F01FF);                // FILE_ALL_ACCESS
 		return buf.array();
 	}
 
-	/** MS-FSCC 2.4.38 — 8 bytes. Always zero (we don't track cursor position). */
+	/**
+	 * 8 bytes. Always zero (we don't track cursor position).
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/e3ce4a39-327e-495c-99b6-6b61606b6f16">MS-FSCC 2.4.38 FilePositionInformation</a>
+	 */
 	static byte[] positionInfo() {
 		return new byte[8];
 	}
 
-	/** MS-FSCC 2.4.24 — 4 bytes. Always zero (no synchronous-io / write-through modes). */
+	/**
+	 * 4 bytes. Always zero (no synchronous-io / write-through modes).
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/52df7798-8330-474b-ac31-9afe8075640c">MS-FSCC 2.4.24 FileModeInformation</a>
+	 */
 	static byte[] modeInfo() {
 		return new byte[4];
 	}
 
-	/** MS-FSCC 2.4.3 — 4 bytes. Always zero (byte-aligned, no DMA). */
+	/**
+	 * 4 bytes. Always zero (byte-aligned, no DMA).
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/9b0b9971-85aa-4651-8438-f1c4298bcb0d">MS-FSCC 2.4.3 FileAlignmentInformation</a>
+	 */
 	static byte[] alignmentInfo() {
 		return new byte[4];
 	}
 
 	/**
-	 * MS-FSCC 2.4.26 — {@code FileNameLength(4) + FileName(UTF-16LE)}. Name is absolute from the
-	 * share root, backslash-delimited, leading backslash: {@code "\\"} for root, {@code "\\file.txt"}
-	 * for a file.
+	 * {@code FileNameLength(4) + FileName(UTF-16LE)}. Name is absolute from the share root, backslash-
+	 * delimited, leading backslash: {@code "\\"} for root, {@code "\\file.txt"} for a file.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/cb30e415-54c5-4483-a346-822ea90e1e89">MS-FSCC 2.4.26 FileNameInformation</a>
 	 */
 	static byte[] nameInfo(String openPath) {
 		byte[] nameBytes = displayName(openPath).getBytes(StandardCharsets.UTF_16LE);
@@ -106,8 +132,9 @@ public final class FileInfoWriter {
 	}
 
 	/**
-	 * MS-FSCC 2.4.2a — composite: Basic(40) + Standard(24) + Internal(8) + Ea(4) + Access(4) +
-	 * Position(8) + Mode(4) + Alignment(4) + Name(variable). The fixed prefix is 96 bytes.
+	 * Composite: Basic(40) + Standard(24) + Internal(8) + Ea(4) + Access(4) + Position(8) + Mode(4) +
+	 * Alignment(4) + Name(variable). The fixed prefix is 96 bytes.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/95f3056a-ebc1-4f5d-b938-3f68a44677a6">MS-FSCC 2.4.2a FileAllInformation</a>
 	 */
 	static byte[] allInfo(String openPath, FileBasicInfo basic, FileStandardInfo standard) {
 		byte[] nameBytes = displayName(openPath).getBytes(StandardCharsets.UTF_16LE);
@@ -144,12 +171,18 @@ public final class FileInfoWriter {
 		return buf.array();
 	}
 
-	/** MS-FSCC 2.4.44 — empty buffer = "no alternate streams" (NTFS concept, not applicable here). */
+	/**
+	 * Empty buffer = "no alternate streams" (NTFS concept, not applicable here).
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/f8762be6-3ab9-411e-a7d6-5cc68f70c78d">MS-FSCC 2.4.44 FileStreamInformation</a>
+	 */
 	static byte[] streamInfo() {
 		return new byte[0];
 	}
 
-	/** MS-FSCC 2.4.25 — 56 bytes. Timestamps + sizes + attrs, packed tight. */
+	/**
+	 * 56 bytes. Timestamps + sizes + attrs, packed tight.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/26d261db-58d1-4513-a548-074448cbb146">MS-FSCC 2.4.25 FileNetworkOpenInformation</a>
+	 */
 	static byte[] networkOpenInfo(FileBasicInfo basic, FileStandardInfo standard) {
 		var buf = alloc(56);
 		buf.putLong(WinFileTime.fromInstant(basic.creationTime()));
@@ -163,7 +196,10 @@ public final class FileInfoWriter {
 		return buf.array();
 	}
 
-	/** MS-FSCC 2.4.6 — 8 bytes. ReparseTag=0 (no reparse points). */
+	/**
+	 * 8 bytes. ReparseTag=0 (no reparse points).
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/d295752f-ce89-4b98-8553-266d37c84f0e">MS-FSCC 2.4.6 FileAttributeTagInformation</a>
+	 */
 	static byte[] attributeTagInfo(FileBasicInfo basic) {
 		var buf = alloc(8);
 		buf.putInt(basic.fileAttributes());

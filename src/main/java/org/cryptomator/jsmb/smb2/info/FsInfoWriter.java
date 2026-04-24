@@ -10,6 +10,8 @@ import java.nio.charset.StandardCharsets;
 /**
  * Serializes the MS-FSCC 2.5 filesystem-level info classes that {@code QUERY_INFO} can return for
  * an open on a share.
+ *
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/ee12042a-9352-46e3-9f67-c094b75fe6c3">MS-FSCC 2.5 File System Information Classes</a>
  */
 public final class FsInfoWriter {
 
@@ -31,8 +33,9 @@ public final class FsInfoWriter {
 	}
 
 	/**
-	 * MS-FSCC 2.5.9 — {@code VolumeCreationTime(8) + VolumeSerialNumber(4) + VolumeLabelLength(4) +
-	 * SupportsObjects(1) + Reserved(1) + VolumeLabel(UTF-16LE, variable)}.
+	 * {@code VolumeCreationTime(8) + VolumeSerialNumber(4) + VolumeLabelLength(4) + SupportsObjects(1) +
+	 * Reserved(1) + VolumeLabel(UTF-16LE, variable)}.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/bf691378-c34e-4a13-976e-404ea1a87738">MS-FSCC 2.5.9 FileFsVolumeInformation</a>
 	 */
 	static byte[] volumeInfo(String label, long creationFileTime) {
 		byte[] labelBytes = label.getBytes(StandardCharsets.UTF_16LE);
@@ -46,7 +49,10 @@ public final class FsInfoWriter {
 		return buf.array();
 	}
 
-	/** MS-FSCC 2.5.8 — 24 bytes. */
+	/**
+	 * 24 bytes.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/e13e068c-e3a7-4dd4-94fd-3892b492e6e7">MS-FSCC 2.5.8 FileFsSizeInformation</a>
+	 */
 	static byte[] sizeInfo(FsSize size) {
 		var buf = alloc(24);
 		buf.putLong(size.totalAllocationUnits());
@@ -56,7 +62,10 @@ public final class FsInfoWriter {
 		return buf.array();
 	}
 
-	/** MS-FSCC 2.5.10 — 8 bytes, advertises a remote disk volume. */
+	/**
+	 * 8 bytes, advertises a remote disk volume.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/616b66d5-b335-4e1c-8f87-b4a55e8d3e4a">MS-FSCC 2.5.10 FileFsDeviceInformation</a>
+	 */
 	static byte[] deviceInfo() {
 		var buf = alloc(8);
 		buf.putInt(DEVICE_TYPE_DISK);
@@ -65,8 +74,9 @@ public final class FsInfoWriter {
 	}
 
 	/**
-	 * MS-FSCC 2.5.1 — {@code FileSystemAttributes(4) + MaximumComponentNameLength(4) +
-	 * FileSystemNameLength(4) + FileSystemName(UTF-16LE, variable)}.
+	 * {@code FileSystemAttributes(4) + MaximumComponentNameLength(4) + FileSystemNameLength(4) +
+	 * FileSystemName(UTF-16LE, variable)}.
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/ebc7e6e5-4650-4e54-b17c-cf60f6fbeeaa">MS-FSCC 2.5.1 FileFsAttributeInformation</a>
 	 */
 	static byte[] attributeInfo(FsAttributes attrs) {
 		byte[] nameBytes = attrs.fileSystemName().getBytes(StandardCharsets.UTF_16LE);
@@ -78,7 +88,10 @@ public final class FsInfoWriter {
 		return buf.array();
 	}
 
-	/** MS-FSCC 2.5.4 — 32 bytes. CallerAvailable == ActualAvailable (no per-user quotas). */
+	/**
+	 * 32 bytes. CallerAvailable == ActualAvailable (no per-user quotas).
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/63768db7-9012-4209-8cca-00781e7322f5">MS-FSCC 2.5.4 FileFsFullSizeInformation</a>
+	 */
 	static byte[] fullSizeInfo(FsSize size) {
 		var buf = alloc(32);
 		buf.putLong(size.totalAllocationUnits());

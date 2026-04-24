@@ -4,6 +4,9 @@ import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
 
+/**
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/fb188936-5050-48d3-b350-dc43059638a4">2.2.1.2 SMB2 Packet Header - SYNC</a>
+ */
 public record PacketHeader(MemorySegment segment) {
 
 	public static final char STRUCTURE_SIZE = 64;
@@ -37,6 +40,7 @@ public record PacketHeader(MemorySegment segment) {
 		return segment.get(Layouts.LE_UINT16, 14);
 	}
 
+	// CreditRequest/CreditResponse
 	public char creditResponse() {
 		return segment.get(Layouts.LE_UINT16, 14);
 	}

@@ -51,4 +51,19 @@ public record ReadRequest(PacketHeader header, MemorySegment segment) implements
 	public int remainingBytes() {
 		return segment.get(Layouts.LE_INT32, 40);
 	}
+
+	/**
+	 * Offset of the channel-specific buffer, measured from the start of the SMB2 header. Non-zero only
+	 * when {@link #channel()} indicates RDMA — ignored on plain TCP transports.
+	 */
+	public char readChannelInfoOffset() {
+		return segment.get(Layouts.LE_UINT16, 44);
+	}
+
+	/**
+	 * Length of the channel-specific buffer. Non-zero only when {@link #channel()} indicates RDMA.
+	 */
+	public char readChannelInfoLength() {
+		return segment.get(Layouts.LE_UINT16, 46);
+	}
 }

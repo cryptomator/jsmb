@@ -146,7 +146,7 @@ class NegotiatorNegotiateContextsTest {
 		var headerSeg = MemorySegment.ofArray(new byte[PacketHeader.STRUCTURE_SIZE]);
 		headerSeg.set(Layouts.LE_INT32, 0, SMB2Message.PROTOCOL_ID);
 		headerSeg.set(Layouts.LE_UINT16, 4, PacketHeader.STRUCTURE_SIZE);
-		headerSeg.set(Layouts.LE_UINT16, 12, Command.NEGOATIATE.value());
+		headerSeg.set(Layouts.LE_UINT16, 12, Command.NEGOTIATE.value());
 		return new NegotiateRequest(new PacketHeader(headerSeg), body);
 	}
 }

@@ -125,9 +125,11 @@ public sealed interface NtlmSession permits NtlmSession.Initial, NtlmSession.Awa
 
 			var clientSigningKey = signKey(negFlg, exportedSessionKey, "Client");
 			var serverSigningKey = signKey(negFlg, exportedSessionKey, "Server");
-			// TODO: derive session keys and return ntlm session object
-			//	Set ClientSealingKey to SEALKEY(NegFlg, ExportedSessionKey , "Client")
-			//	Set ServerSealingKey to SEALKEY(NegFlg, ExportedSessionKey , "Server")
+			// ClientSealingKey / ServerSealingKey (MS-NLMP SEALKEY) are intentionally not derived: SMB 3.1.1
+			// doesn't use NTLMSSP's own SEAL/SIGN envelope. It consumes ExportedSessionKey as the input to
+			// NIST SP 800-108 KDF and derives its own signing / encryption / decryption / application keys
+			// (see Negotiator#gssAuthenticate). NTLMSSP sealing would only matter if we used GSS_Wrap /
+			// GSS_GetMIC on NTLMSSP-framed traffic, which SMB 3.x does not.
 			return new Authenticated(exportedSessionKey, clientSigningKey, serverSigningKey);
 		}
 

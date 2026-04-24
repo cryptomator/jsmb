@@ -46,10 +46,6 @@ public record NegotiateRequest(PacketHeader header, MemorySegment segment) imple
 		return segment.get(Layouts.LE_UINT16, 32);
 	}
 
-	public long clientStartTime() {
-		return segment.get(Layouts.LE_INT64, 28);
-	}
-
 	public char[] dialects() {
 		return segment.asSlice(36, dialectCount() * Character.BYTES).toArray(Layouts.LE_UINT16);
 	}

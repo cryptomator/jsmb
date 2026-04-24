@@ -3,7 +3,7 @@ package org.cryptomator.jsmb.smb2;
 import org.jetbrains.annotations.Range;
 
 public enum Command {
-	NEGOATIATE(0x0000),
+	NEGOTIATE(0x0000),
 	SESSION_SETUP(0x0001),
 	LOGOFF(0x0002),
 	TREE_CONNECT(0x0003),

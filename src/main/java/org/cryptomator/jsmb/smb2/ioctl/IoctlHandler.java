@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
  * Minimal SMB2 IOCTL handler. Handles the spec-mandated {@code FSCTL_VALIDATE_NEGOTIATE_INFO}
  * response for dialect 3.1.1 and refuses everything else with {@code STATUS_INVALID_DEVICE_REQUEST}.
  *
- * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/17a48d04-51c7-41a3-92c7-5ea7b9437b99">3.3.5.15 Receiving an SMB2 IOCTL Request</a>
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/138ed63d-84e8-4d89-9bc7-a73211642d52">3.3.5.15 Receiving an SMB2 IOCTL Request</a>
  */
 public record IoctlHandler(Connection connection) {
 

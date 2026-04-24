@@ -37,7 +37,7 @@ public record SMB1Negotiator(TcpServer server, Connection connection) {
 			var header = PacketHeader.builder();
 			header.creditCharge((char) 0);
 			header.status(NTStatus.STATUS_SUCCESS);
-			header.command(Command.NEGOATIATE.value());
+			header.command(Command.NEGOTIATE.value());
 			header.creditResponse((char) 1);
 			header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 			header.nextCommand(0);

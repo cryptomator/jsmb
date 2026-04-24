@@ -237,7 +237,7 @@ class TcpConnection implements Runnable {
 		byte[] plain = response.serialize();
 		var command = Command.valueOf(response.header().command());
 		// NEGOTIATE and SESSION_SETUP responses are never encrypted, per MS-SMB2 3.3.4.1.4
-		if (command == Command.NEGOATIATE || command == Command.SESSION_SETUP) {
+		if (command == Command.NEGOTIATE || command == Command.SESSION_SETUP) {
 			return plain;
 		}
 		var session = connection.sessionTable.get(response.header().sessionId());
