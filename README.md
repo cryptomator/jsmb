@@ -99,6 +99,22 @@ A Podman-hosted wrapper for driving jSMB from Samba's reference client lives und
 ./interop/run-samba-scenario.sh smoke.txt
 ```
 
+### Mounting from Windows
+
+Windows pins the SMB client to TCP port **445** by default and rejects any attempt to connect to an alternate port — mapping `\\localhost\data` when jSMB listens on 4445 will normally fail with *"The specified server cannot perform the requested operation"*.
+
+Since **Windows 11 24H2 / Windows Server 2025** the `SmbShare` PowerShell module exposes a `-TcpPort` parameter on `New-SmbMapping` that opts the client into a non-default port. From an elevated PowerShell session:
+
+```powershell
+New-SmbMapping -LocalPath Z: `
+               -RemotePath \\localhost\data `
+               -TcpPort 4445 `
+               -UserName DOMAIN\user `
+               -Password password
+```
+
+On older Windows releases the `-TcpPort` parameter does not exist and there is no supported workaround — test from Linux (`smbclient`) or a Windows 11 24H2+ VM instead.
+
 ### Wireshark packet captures
 
 jSMB listens on a configurable TCP port (e.g. `4445`).
