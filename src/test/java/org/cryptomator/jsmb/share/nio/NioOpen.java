@@ -28,19 +28,26 @@ class NioOpen implements SmbOpen {
 	private Path target;
 	private final FileChannel channel; // null iff directory
 	private final boolean directory;
+	private final boolean existedBeforeOpen;
 	private final FileId fileId = FileId.random();
 	private boolean deletePending;
 
-	NioOpen(Path shareRoot, Path target, FileChannel channel, boolean directory) {
+	NioOpen(Path shareRoot, Path target, FileChannel channel, boolean directory, boolean existedBeforeOpen) {
 		this.shareRoot = shareRoot;
 		this.target = target;
 		this.channel = channel;
 		this.directory = directory;
+		this.existedBeforeOpen = existedBeforeOpen;
 	}
 
 	@Override
 	public FileId fileId() {
 		return fileId;
+	}
+
+	@Override
+	public boolean existedBeforeOpen() {
+		return existedBeforeOpen;
 	}
 
 	@Override

@@ -75,7 +75,7 @@ public class NioShare implements SmbShare {
 			Set<StandardOpenOption> opts = EnumSet.of(StandardOpenOption.READ, StandardOpenOption.WRITE);
 			channel = FileChannel.open(target, opts);
 		}
-		return new NioOpen(root, target, channel, isDir);
+		return new NioOpen(root, target, channel, isDir, exists);
 	}
 
 	@Override

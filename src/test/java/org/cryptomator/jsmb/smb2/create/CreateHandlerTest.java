@@ -137,6 +137,48 @@ class CreateHandlerTest {
 		}
 
 		@Test
+		@DisplayName("OPEN_IF on a missing path creates the file and reports CREATE_ACTION_CREATED")
+		void openIfCreatesWhenMissing() {
+			var response = handler.create(buildCreateRequest("fresh.txt", OpenParams.Disposition.OPEN_IF, 0));
+
+			Assertions.assertInstanceOf(CreateResponse.class, response);
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			Assertions.assertTrue(Files.isRegularFile(shareRoot.resolve("fresh.txt")));
+			Assertions.assertEquals(CreateResponse.CREATE_ACTION_CREATED, response.segment().get(Layouts.LE_INT32, 4));
+		}
+
+		@Test
+		@DisplayName("OPEN_IF on an existing path opens it and reports CREATE_ACTION_OPENED")
+		void openIfOpensWhenPresent() throws IOException {
+			Files.createFile(shareRoot.resolve("there.txt"));
+
+			var response = handler.create(buildCreateRequest("there.txt", OpenParams.Disposition.OPEN_IF, 0));
+
+			Assertions.assertInstanceOf(CreateResponse.class, response);
+			Assertions.assertEquals(CreateResponse.CREATE_ACTION_OPENED, response.segment().get(Layouts.LE_INT32, 4));
+		}
+
+		@Test
+		@DisplayName("OVERWRITE_IF on a missing path creates the file and reports CREATE_ACTION_CREATED")
+		void overwriteIfCreatesWhenMissing() {
+			var response = handler.create(buildCreateRequest("newish.txt", OpenParams.Disposition.OVERWRITE_IF, 0));
+
+			Assertions.assertInstanceOf(CreateResponse.class, response);
+			Assertions.assertEquals(CreateResponse.CREATE_ACTION_CREATED, response.segment().get(Layouts.LE_INT32, 4));
+		}
+
+		@Test
+		@DisplayName("OVERWRITE_IF on an existing path overwrites it and reports CREATE_ACTION_OVERWRITTEN")
+		void overwriteIfOverwritesWhenPresent() throws IOException {
+			Files.writeString(shareRoot.resolve("stale.txt"), "old");
+
+			var response = handler.create(buildCreateRequest("stale.txt", OpenParams.Disposition.OVERWRITE_IF, 0));
+
+			Assertions.assertInstanceOf(CreateResponse.class, response);
+			Assertions.assertEquals(CreateResponse.CREATE_ACTION_OVERWRITTEN, response.segment().get(Layouts.LE_INT32, 4));
+		}
+
+		@Test
 		@DisplayName("CREATE with unknown TreeId returns STATUS_NETWORK_NAME_DELETED")
 		void unknownTreeId() {
 			var request = buildCreateRequestOn(0xFEEDFACE, "foo.txt", OpenParams.Disposition.OPEN, 0);

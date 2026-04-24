@@ -23,6 +23,14 @@ public interface SmbOpen extends AutoCloseable {
 
 	FileId fileId();
 
+	/**
+	 * Whether the backend file/directory existed on disk at the moment {@link SmbShare#open} was invoked.
+	 * The {@code CREATE} handler needs this to distinguish {@code FILE_OPENED} vs {@code FILE_CREATED} for
+	 * {@code FILE_OPEN_IF}, and {@code FILE_OVERWRITTEN} vs {@code FILE_CREATED} for {@code FILE_OVERWRITE_IF}
+	 * (MS-SMB2 2.2.14 {@code CreateAction}).
+	 */
+	boolean existedBeforeOpen();
+
 	FileBasicInfo queryBasic() throws IOException;
 
 	FileStandardInfo queryStandard() throws IOException;

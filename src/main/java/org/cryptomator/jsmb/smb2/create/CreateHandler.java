@@ -91,7 +91,7 @@ public record CreateHandler(Connection connection) {
 		var response = new CreateResponse(header);
 		response.oplockLevel((byte) 0);
 		response.flags((byte) 0);
-		response.createAction(resolveCreateAction(disposition));
+		response.createAction(resolveCreateAction(disposition, backend.existedBeforeOpen()));
 		response.creationTime(WinFileTime.fromInstant(basic.creationTime()));
 		response.lastAccessTime(WinFileTime.fromInstant(basic.lastAccessTime()));
 		response.lastWriteTime(WinFileTime.fromInstant(basic.lastWriteTime()));
@@ -152,17 +152,20 @@ public record CreateHandler(Connection connection) {
 	}
 
 	/**
-	 * Maps the request's {@code CreateDisposition} to a {@code CreateAction} for the response.
-	 * TODO: the spec wants "OPENED vs CREATED" for {@code OPEN_IF} / {@code OVERWRITE_IF} to reflect
-	 *       what actually happened; the SPI doesn't surface that today, so we use the best heuristic
-	 *       (existed → matches the open case, else matches the create case).
+	 * Maps the request's {@code CreateDisposition} to the {@code CreateAction} value the response carries back
+	 * (MS-SMB2 2.2.14). For {@code FILE_OPEN_IF} / {@code FILE_OVERWRITE_IF} the spec distinguishes OPENED /
+	 * OVERWRITTEN (the target existed) from CREATED (a fresh entry had to be made), so we key off the backend's
+	 * pre-open existence flag; the other dispositions are unambiguous given that {@link SmbShare#open} already
+	 * threw on a conflicting state.
 	 */
-	private static int resolveCreateAction(OpenParams.Disposition disposition) {
+	private static int resolveCreateAction(OpenParams.Disposition disposition, boolean existedBeforeOpen) {
 		return switch (disposition) {
 			case SUPERSEDE -> CreateResponse.CREATE_ACTION_SUPERSEDED;
-			case OPEN, OPEN_IF -> CreateResponse.CREATE_ACTION_OPENED;
+			case OPEN -> CreateResponse.CREATE_ACTION_OPENED;
 			case CREATE -> CreateResponse.CREATE_ACTION_CREATED;
-			case OVERWRITE, OVERWRITE_IF -> CreateResponse.CREATE_ACTION_OVERWRITTEN;
+			case OPEN_IF -> existedBeforeOpen ? CreateResponse.CREATE_ACTION_OPENED : CreateResponse.CREATE_ACTION_CREATED;
+			case OVERWRITE -> CreateResponse.CREATE_ACTION_OVERWRITTEN;
+			case OVERWRITE_IF -> existedBeforeOpen ? CreateResponse.CREATE_ACTION_OVERWRITTEN : CreateResponse.CREATE_ACTION_CREATED;
 		};
 	}
 
