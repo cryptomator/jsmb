@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2.io;
 
 import org.cryptomator.jsmb.common.NTStatus;
+import org.cryptomator.jsmb.share.SmbFile;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -32,6 +33,10 @@ public record ReadHandler(Connection connection) {
 		if (open == null) {
 			return ErrorResponse.create(request, NTStatus.STATUS_FILE_CLOSED);
 		}
+		if (!(open.backend instanceof SmbFile file)) {
+			// READ on a directory handle — spec (MS-SMB2 3.3.5.12) has the server reject this.
+			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_DEVICE_REQUEST);
+		}
 
 		int requested = request.length();
 		if (requested < 0 || requested > connection.maxReadSize) {
@@ -42,7 +47,7 @@ public record ReadHandler(Connection connection) {
 		byte[] buffer = new byte[requested];
 		int bytesRead;
 		try {
-			bytesRead = open.backend.read(ByteBuffer.wrap(buffer), request.offset());
+			bytesRead = file.read(ByteBuffer.wrap(buffer), request.offset());
 		} catch (IOException e) {
 			LOG.warn("READ fileId={} offset={} length={} failed", open.fileId, request.offset(), requested, e);
 			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);

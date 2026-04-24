@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2.io;
 
 import org.cryptomator.jsmb.common.NTStatus;
+import org.cryptomator.jsmb.share.SmbFile;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -31,6 +32,10 @@ public record WriteHandler(Connection connection) {
 		if (open == null) {
 			return ErrorResponse.create(request, NTStatus.STATUS_FILE_CLOSED);
 		}
+		if (!(open.backend instanceof SmbFile file)) {
+			// WRITE on a directory handle — spec (MS-SMB2 3.3.5.13) has the server reject this.
+			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_DEVICE_REQUEST);
+		}
 
 		int length = request.length();
 		if (length < 0 || length > connection.maxWriteSize) {
@@ -41,7 +46,7 @@ public record WriteHandler(Connection connection) {
 		ByteBuffer src = request.data().asByteBuffer();
 		int bytesWritten;
 		try {
-			bytesWritten = open.backend.write(src, request.offset());
+			bytesWritten = file.write(src, request.offset());
 		} catch (IOException e) {
 			LOG.warn("WRITE fileId={} offset={} length={} failed", open.fileId, request.offset(), length, e);
 			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
@@ -64,8 +69,11 @@ public record WriteHandler(Connection connection) {
 		if (open == null) {
 			return ErrorResponse.create(request, NTStatus.STATUS_FILE_CLOSED);
 		}
+		if (!(open.backend instanceof SmbFile file)) {
+			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_DEVICE_REQUEST);
+		}
 		try {
-			open.backend.flush();
+			file.flush();
 		} catch (IOException e) {
 			LOG.warn("FLUSH fileId={} failed", open.fileId, e);
 			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);

@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2.info;
 
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.FileBasicInfo;
+import org.cryptomator.jsmb.share.SmbFile;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -124,8 +125,11 @@ public record SetInfoHandler(Connection connection) {
 		if (buffer.byteSize() < 8) {
 			return NTStatus.STATUS_INFO_LENGTH_MISMATCH;
 		}
+		if (!(open.backend instanceof SmbFile file)) {
+			return NTStatus.STATUS_INVALID_DEVICE_REQUEST;
+		}
 		long length = buffer.get(Layouts.LE_INT64, 0);
-		open.backend.setEndOfFile(length);
+		file.setEndOfFile(length);
 		LOG.debug("SET_INFO fileId={} setEndOfFile({})", open.fileId, length);
 		return NTStatus.STATUS_SUCCESS;
 	}

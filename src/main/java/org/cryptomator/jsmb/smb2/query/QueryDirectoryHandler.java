@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2.query;
 
 import org.cryptomator.jsmb.common.NTStatus;
+import org.cryptomator.jsmb.share.SmbDirectory;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -34,6 +35,10 @@ public record QueryDirectoryHandler(Connection connection) {
 		if (open == null) {
 			return ErrorResponse.create(request, NTStatus.STATUS_FILE_CLOSED);
 		}
+		if (!(open.backend instanceof SmbDirectory directory)) {
+			// QUERY_DIRECTORY on a file handle — MS-SMB2 3.3.5.18 has the server reject this.
+			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
+		}
 
 		FileInformationClass cls;
 		try {
@@ -49,10 +54,8 @@ public record QueryDirectoryHandler(Connection connection) {
 
 		if (firstListing || restart) {
 			var pattern = request.fileName();
-			try (var stream = open.backend.listChildren(pattern.isEmpty() ? null : pattern)) {
+			try (var stream = directory.listChildren(pattern.isEmpty() ? null : pattern)) {
 				open.directoryEntries = stream.toList();
-			} catch (UnsupportedOperationException e) {
-				return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
 			} catch (IOException e) {
 				LOG.warn("QUERY_DIRECTORY listing failed", e);
 				return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);

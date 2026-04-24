@@ -3,6 +3,8 @@ package org.cryptomator.jsmb.share.nio;
 import org.cryptomator.jsmb.share.DirEntry;
 import org.cryptomator.jsmb.share.FileBasicInfo;
 import org.cryptomator.jsmb.share.OpenParams;
+import org.cryptomator.jsmb.share.SmbDirectory;
+import org.cryptomator.jsmb.share.SmbFile;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -95,7 +97,7 @@ class NioShareTest {
 		void writeThenReadRoundtrips(@TempDir Path root) throws IOException {
 			var share = new NioShare(root);
 			byte[] payload = "The quick brown fox".getBytes(StandardCharsets.UTF_8);
-			try (var open = share.open("file.bin", CREATE_FILE)) {
+			try (var open = (SmbFile) share.open("file.bin", CREATE_FILE)) {
 				int written = open.write(ByteBuffer.wrap(payload), 0);
 				Assertions.assertEquals(payload.length, written);
 				open.flush();
@@ -112,7 +114,7 @@ class NioShareTest {
 		void readPastEofReturnsMinusOne(@TempDir Path root) throws IOException {
 			var share = new NioShare(root);
 			Files.writeString(root.resolve("small.txt"), "abc");
-			try (var open = share.open("small.txt", OPEN_IF_FILE)) {
+			try (var open = (SmbFile) share.open("small.txt", OPEN_IF_FILE)) {
 				var buf = ByteBuffer.allocate(8);
 				int read = open.read(buf, 100);
 				Assertions.assertEquals(-1, read);
@@ -120,26 +122,26 @@ class NioShareTest {
 		}
 
 		@Test
-		@DisplayName("read / write on a directory handle throws UnsupportedOperationException")
-		void readWriteOnDirectoryThrows(@TempDir Path root) throws IOException {
-			var share = new NioShare(root);
-			try (var open = share.open("adir", CREATE_DIR)) {
-				Assertions.assertThrows(UnsupportedOperationException.class, () -> open.read(ByteBuffer.allocate(1), 0));
-				Assertions.assertThrows(UnsupportedOperationException.class, () -> open.write(ByteBuffer.allocate(1), 0));
-			}
-		}
-
-		@Test
 		@DisplayName("setEndOfFile truncates when shrinking and extends with zeros when growing")
 		void setEndOfFileTruncatesAndExtends(@TempDir Path root) throws IOException {
 			var share = new NioShare(root);
-			try (var open = share.open("resize.bin", CREATE_FILE)) {
+			try (var open = (SmbFile) share.open("resize.bin", CREATE_FILE)) {
 				open.write(ByteBuffer.wrap(new byte[]{1, 2, 3, 4, 5, 6, 7, 8}), 0);
 				open.setEndOfFile(4);
 				Assertions.assertEquals(4L, open.queryStandard().endOfFile());
 
 				open.setEndOfFile(10);
 				Assertions.assertEquals(10L, open.queryStandard().endOfFile());
+			}
+		}
+
+		@Test
+		@DisplayName("A directory handle isn't an SmbFile — the sealed hierarchy prevents read/write at compile time")
+		void directoryHandleIsNotAFile(@TempDir Path root) throws IOException {
+			var share = new NioShare(root);
+			try (var open = share.open("adir", CREATE_DIR)) {
+				Assertions.assertFalse(open instanceof SmbFile);
+				Assertions.assertTrue(open instanceof SmbDirectory);
 			}
 		}
 	}
@@ -218,7 +220,7 @@ class NioShareTest {
 			Files.writeString(root.resolve("b.txt"), "bb");
 			Files.createDirectory(root.resolve("sub"));
 			var share = new NioShare(root);
-			try (var dir = share.open("", OPEN_IF_DIR);
+			try (var dir = (SmbDirectory) share.open("", OPEN_IF_DIR);
 				 var entries = dir.listChildren(null)) {
 				var names = entries.map(DirEntry::name).sorted().toList();
 				Assertions.assertEquals(java.util.List.of(".", "a.txt", "b.txt", "sub"), names);
@@ -231,7 +233,7 @@ class NioShareTest {
 			Files.createDirectory(root.resolve("sub"));
 			Files.writeString(root.resolve("sub").resolve("child.txt"), "x");
 			var share = new NioShare(root);
-			try (var dir = share.open("sub", OPEN_IF_DIR);
+			try (var dir = (SmbDirectory) share.open("sub", OPEN_IF_DIR);
 				 var entries = dir.listChildren(null)) {
 				var names = entries.map(DirEntry::name).sorted().toList();
 				Assertions.assertEquals(java.util.List.of(".", "..", "child.txt"), names);
@@ -242,7 +244,7 @@ class NioShareTest {
 		@DisplayName("listChildren on an empty share root still yields the synthetic '.' entry")
 		void listsPseudoEntriesOnEmptyShareRoot(@TempDir Path root) throws IOException {
 			var share = new NioShare(root);
-			try (var dir = share.open("", OPEN_IF_DIR);
+			try (var dir = (SmbDirectory) share.open("", OPEN_IF_DIR);
 				 var entries = dir.listChildren(null)) {
 				var names = entries.map(DirEntry::name).toList();
 				Assertions.assertEquals(java.util.List.of("."), names);
@@ -255,7 +257,7 @@ class NioShareTest {
 			Files.writeString(root.resolve("one.txt"), "");
 			Files.writeString(root.resolve("two.md"), "");
 			var share = new NioShare(root);
-			try (var dir = share.open("", OPEN_IF_DIR);
+			try (var dir = (SmbDirectory) share.open("", OPEN_IF_DIR);
 				 var entries = dir.listChildren("*.txt")) {
 				var names = entries.map(DirEntry::name).toList();
 				Assertions.assertEquals(java.util.List.of("one.txt"), names);
@@ -263,11 +265,12 @@ class NioShareTest {
 		}
 
 		@Test
-		@DisplayName("listChildren on a file handle throws UnsupportedOperationException")
-		void listChildrenOnFileThrows(@TempDir Path root) throws IOException {
+		@DisplayName("A file handle isn't an SmbDirectory — the sealed hierarchy prevents listChildren at compile time")
+		void fileHandleIsNotADirectory(@TempDir Path root) throws IOException {
 			var share = new NioShare(root);
 			try (var open = share.open("file.txt", CREATE_FILE)) {
-				Assertions.assertThrows(UnsupportedOperationException.class, () -> open.listChildren(null));
+				Assertions.assertFalse(open instanceof SmbDirectory);
+				Assertions.assertTrue(open instanceof SmbFile);
 			}
 		}
 	}
