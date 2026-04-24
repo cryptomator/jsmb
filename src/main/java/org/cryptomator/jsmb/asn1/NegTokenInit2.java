@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
  */
 public class NegTokenInit2 {
 
+	// Yes, this literal is the spec: MS-SPNEGO §2.2.1 mandates NegHints.hintName = "not_defined_in_RFC4178@please_ignore" verbatim.
 	private static final byte[] NOT_DEFINED_PLEASE_IGNORE = "not_defined_in_RFC4178@please_ignore".getBytes(StandardCharsets.US_ASCII);
 
 	private NegTokenInit2() {
