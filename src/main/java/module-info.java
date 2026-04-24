@@ -10,4 +10,5 @@ module org.cryptomator.jsmb {
 	exports org.cryptomator.jsmb.ntlmv2 to java.base; // allow java.security.Provider to access org.cryptomator.jsmb.ntlmv2.MD4
 
 	exports org.cryptomator.jsmb;
+	exports org.cryptomator.jsmb.share;
 }

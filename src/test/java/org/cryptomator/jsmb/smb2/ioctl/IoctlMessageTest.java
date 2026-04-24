@@ -61,6 +61,50 @@ class IoctlMessageTest {
 	}
 
 	@Test
+	@DisplayName("IoctlRequest.inputBuffer returns empty when InputOffset is before the body (would underflow past the fixed portion)")
+	public void testRequestInputOffsetUnderflow() {
+		var seg = MemorySegment.ofArray(new byte[56 + 4]);
+		seg.set(Layouts.LE_UINT16, 0, (char) 57);
+		seg.set(Layouts.LE_INT32, 24, 0); // InputOffset = 0 → start = -64
+		seg.set(Layouts.LE_INT32, 28, 4); // InputCount = 4
+
+		Assertions.assertArrayEquals(new byte[0], new IoctlRequest(null, seg).inputBuffer());
+	}
+
+	@Test
+	@DisplayName("IoctlRequest.inputBuffer returns empty when InputOffset+InputCount extends past the body")
+	public void testRequestInputRangeOverruns() {
+		var seg = MemorySegment.ofArray(new byte[56 + 4]);
+		seg.set(Layouts.LE_UINT16, 0, (char) 57);
+		seg.set(Layouts.LE_INT32, 24, PacketHeader.STRUCTURE_SIZE + 56); // InputOffset = start of buffer
+		seg.set(Layouts.LE_INT32, 28, 5);                                 // InputCount = 5, only 4 bytes available
+
+		Assertions.assertArrayEquals(new byte[0], new IoctlRequest(null, seg).inputBuffer());
+	}
+
+	@Test
+	@DisplayName("IoctlRequest.inputBuffer treats a huge (signed-negative) InputCount as invalid and returns empty")
+	public void testRequestInputCountNegativeAsUInt32() {
+		var seg = MemorySegment.ofArray(new byte[56 + 4]);
+		seg.set(Layouts.LE_UINT16, 0, (char) 57);
+		seg.set(Layouts.LE_INT32, 24, PacketHeader.STRUCTURE_SIZE + 56);
+		seg.set(Layouts.LE_INT32, 28, 0x80000000); // wire uint32 = 2^31, int = -2^31
+
+		Assertions.assertArrayEquals(new byte[0], new IoctlRequest(null, seg).inputBuffer());
+	}
+
+	@Test
+	@DisplayName("IoctlRequest.inputBuffer treats a huge (signed-negative) InputOffset as invalid and returns empty")
+	public void testRequestInputOffsetNegativeAsUInt32() {
+		var seg = MemorySegment.ofArray(new byte[56 + 4]);
+		seg.set(Layouts.LE_UINT16, 0, (char) 57);
+		seg.set(Layouts.LE_INT32, 24, 0x80000000); // wire uint32 = 2^31
+		seg.set(Layouts.LE_INT32, 28, 4);
+
+		Assertions.assertArrayEquals(new byte[0], new IoctlRequest(null, seg).inputBuffer());
+	}
+
+	@Test
 	@DisplayName("IoctlResponse setters write StructureSize, CtlCode and FileId at the correct offsets")
 	public void testResponseBuild() {
 		var header = PacketHeader.builder().build();

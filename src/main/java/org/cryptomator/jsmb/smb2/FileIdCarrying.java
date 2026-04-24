@@ -1,5 +1,7 @@
 package org.cryptomator.jsmb.smb2;
 
+import org.cryptomator.jsmb.share.FileId;
+
 /**
  * Mixin for messages whose wire format has a {@link FileId} field referencing a previously opened handle.
  *

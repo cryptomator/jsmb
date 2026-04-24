@@ -65,12 +65,21 @@ public record IoctlRequest(PacketHeader header, MemorySegment segment) implement
 		return (flags() & FLAG_IS_FSCTL) != 0;
 	}
 
+	/**
+	 * Reads the {@code Buffer}'s Input slice (the FSCTL-specific input payload).
+	 *
+	 * <p>{@code InputOffset} and {@code InputCount} are untrusted 32-bit fields from the wire; malformed values (negative count, offset outside the body, arithmetic overflow) yield an empty array rather than an exception,
+	 * matching how {@link org.cryptomator.jsmb.smb2.create.CreateRequest#createContexts()} treats bad offsets. Callers that need to distinguish "no input" from "malformed input" should validate {@link #inputCount()} themselves.
+	 */
 	public byte[] inputBuffer() {
-		int offset = inputOffset();
-		int count = inputCount();
+		long count = inputCount() & 0xFFFFFFFFL;
 		if (count == 0) {
 			return new byte[0];
 		}
-		return segment.asSlice(offset - PacketHeader.STRUCTURE_SIZE, count).toArray(Layouts.BYTE);
+		long start = (inputOffset() & 0xFFFFFFFFL) - PacketHeader.STRUCTURE_SIZE;
+		if (start < 0 || start + count > segment.byteSize()) {
+			return new byte[0];
+		}
+		return segment.asSlice(start, count).toArray(Layouts.BYTE);
 	}
 }

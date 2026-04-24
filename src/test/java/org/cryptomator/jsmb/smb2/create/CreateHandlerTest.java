@@ -8,7 +8,7 @@ import org.cryptomator.jsmb.share.nio.NioShare;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
-import org.cryptomator.jsmb.smb2.FileId;
+import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.smb2.Global;
 import org.cryptomator.jsmb.smb2.PacketHeader;
 import org.cryptomator.jsmb.smb2.Session;

@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.share.DirEntry;
+import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.share.SmbOpen;
 import org.jetbrains.annotations.Nullable;
 

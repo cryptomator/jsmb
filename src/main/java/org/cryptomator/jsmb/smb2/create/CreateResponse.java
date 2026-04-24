@@ -1,6 +1,6 @@
 package org.cryptomator.jsmb.smb2.create;
 
-import org.cryptomator.jsmb.smb2.FileId;
+import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.smb2.PacketHeader;
 import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.util.Layouts;

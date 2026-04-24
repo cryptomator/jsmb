@@ -4,7 +4,7 @@ import org.cryptomator.jsmb.share.DirEntry;
 import org.cryptomator.jsmb.share.FileBasicInfo;
 import org.cryptomator.jsmb.share.FileStandardInfo;
 import org.cryptomator.jsmb.share.SmbOpen;
-import org.cryptomator.jsmb.smb2.FileId;
+import org.cryptomator.jsmb.share.FileId;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

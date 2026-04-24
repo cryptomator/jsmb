@@ -1,4 +1,4 @@
-package org.cryptomator.jsmb.smb2;
+package org.cryptomator.jsmb.share;
 
 import org.cryptomator.jsmb.util.Layouts;
 

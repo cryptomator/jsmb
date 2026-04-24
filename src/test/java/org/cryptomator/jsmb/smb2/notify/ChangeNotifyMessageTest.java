@@ -1,6 +1,6 @@
 package org.cryptomator.jsmb.smb2.notify;
 
-import org.cryptomator.jsmb.smb2.FileId;
+import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.util.Layouts;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;

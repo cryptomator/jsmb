@@ -8,7 +8,7 @@ import org.cryptomator.jsmb.smb1.SMB1Negotiator;
 import org.cryptomator.jsmb.smb1.SmbComNegotiateRequest;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
-import org.cryptomator.jsmb.smb2.FileId;
+import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.smb2.FileIdCarrying;
 import org.cryptomator.jsmb.smb2.LogoffRequest;
 import org.cryptomator.jsmb.smb2.NegotiateRequest;

@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.ntlmv2.NtlmSession;
+import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.srvs.SrvsGlobal;
 import org.cryptomator.jsmb.srvs.SrvsSession;
 import org.jetbrains.annotations.Range;

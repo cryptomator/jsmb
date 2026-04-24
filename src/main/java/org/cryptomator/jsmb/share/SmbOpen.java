@@ -1,7 +1,5 @@
 package org.cryptomator.jsmb.share;
 
-import org.cryptomator.jsmb.smb2.FileId;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.stream.Stream;
