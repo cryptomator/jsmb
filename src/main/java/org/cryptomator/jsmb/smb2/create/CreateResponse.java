@@ -6,6 +6,7 @@ import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.util.Layouts;
 
 import java.lang.foreign.MemorySegment;
+import java.util.List;
 
 /**
  * SMB2 CREATE Response. Fixed portion is 88 bytes; {@link #STRUCTURE_SIZE} is 89 per spec.
@@ -87,21 +88,46 @@ public record CreateResponse(PacketHeader header, MemorySegment segment) impleme
 	}
 
 	/**
-	 * Returns a new response with {@code context} appended past the fixed portion. Stamps
-	 * {@code CreateContextsOffset} / {@code CreateContextsLength} accordingly; callers are responsible for already
-	 * having written the other fixed-portion fields (they're copied verbatim).
+	 * Returns a new response with {@code contexts} appended past the fixed portion. Each context's {@code Next} field is rewritten to the stride to
+	 * the following context (0 on the last); inter-context 8-byte alignment padding is inserted as required by MS-SMB2 2.2.14.
+	 * callers are responsible for already having written the other fixed-portion fields (they're copied verbatim).
 	 *
-	 * <p>Single-context today. Multiple contexts need {@code Next} chaining and 8-byte inter-context alignment; add
-	 * an overload when a second context class arrives.
+	 * @param contexts the contexts to append in order. Empty returns the receiver unchanged.
+	 * @throws IllegalStateException if create contexts have already been appended to this response
 	 */
-	public CreateResponse withCreateContext(CreateContext context) {
-		int ctxSize = (int) context.segment().byteSize();
-		var combined = MemorySegment.ofArray(new byte[FIXED_PORTION_SIZE + ctxSize]);
+	public CreateResponse withCreateContexts(List<CreateContext> contexts) {
+		if (contexts.isEmpty()) {
+			return this;
+		}
+		if (segment.get(Layouts.LE_INT32, 84) != 0) {
+			throw new IllegalStateException("createContexts can only be created once.");
+		}
+
+		int[] strides = new int[contexts.size()];
+		int total = 0;
+		for (int i = 0; i < contexts.size(); i++) {
+			int size = (int) contexts.get(i).segment().byteSize();
+			boolean last = i == contexts.size() - 1;
+			strides[i] = last ? size : size + (8 - size % 8) % 8;
+			total += strides[i];
+		}
+
+		var combined = MemorySegment.ofArray(new byte[FIXED_PORTION_SIZE + total]);
 		combined.asSlice(0, FIXED_PORTION_SIZE).copyFrom(segment);
-		combined.asSlice(FIXED_PORTION_SIZE, ctxSize).copyFrom(context.segment());
-		var next = new CreateResponse(header, combined);
-		next.createContextsOffset(PacketHeader.STRUCTURE_SIZE + FIXED_PORTION_SIZE);
-		next.createContextsLength(ctxSize);
-		return next;
+
+		int pos = FIXED_PORTION_SIZE;
+		for (int i = 0; i < contexts.size(); i++) {
+			var ctxSeg = contexts.get(i).segment();
+			int size = (int) ctxSeg.byteSize();
+			combined.asSlice(pos, size).copyFrom(ctxSeg);
+			boolean last = i == contexts.size() - 1;
+			combined.set(Layouts.LE_INT32, pos, last ? 0 : strides[i]);
+			pos += strides[i];
+		}
+
+		var result = new CreateResponse(header, combined);
+		result.createContextsOffset(PacketHeader.STRUCTURE_SIZE + FIXED_PORTION_SIZE);
+		result.createContextsLength(total);
+		return result;
 	}
 }

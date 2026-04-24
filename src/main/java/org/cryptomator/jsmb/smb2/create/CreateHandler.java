@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.NoSuchFileException;
+import java.util.List;
 
 /**
  * Handles {@code CREATE} and {@code CLOSE} for SMB 3.1.1.
@@ -104,7 +105,7 @@ public record CreateHandler(Connection connection) {
 		if (request.hasCreateContext(CreateContext.NAME_MXAC)) {
 			// The client is asking for the maximal access mask on the freshly opened handle. We don't track ACLs,
 			// so mirror FileInfoWriter.accessInfo() and report FILE_ALL_ACCESS with a success status.
-			response = response.withCreateContext(CreateContext.mxAcResponse(NTStatus.STATUS_SUCCESS, FILE_ALL_ACCESS));
+			response = response.withCreateContexts(List.of(CreateContext.mxAcResponse(NTStatus.STATUS_SUCCESS, FILE_ALL_ACCESS)));
 		}
 		return response;
 	}
