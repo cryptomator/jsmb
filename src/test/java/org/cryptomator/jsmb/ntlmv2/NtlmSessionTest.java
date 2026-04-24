@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb.ntlmv2;
 
+import org.cryptomator.jsmb.ServerIdentity;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ class NtlmSessionTest {
 
 		byte[] negotiateMessage = sc.evaluateChallenge(new byte[0]);
 		// byte[] serverChallenge = ss.evaluateResponse(initialResponse);
-		var ntlmSession = NtlmSession.create().negotiate(negotiateMessage);
+		var ntlmSession = NtlmSession.create().negotiate(negotiateMessage, ServerIdentity.DEFAULT);
 		byte[] clientChallenge = sc.evaluateChallenge(ntlmSession.serverChallenge());
 
 		Assertions.assertDoesNotThrow(() -> ntlmSession.authenticate(clientChallenge, "user", "password", "localhost"));

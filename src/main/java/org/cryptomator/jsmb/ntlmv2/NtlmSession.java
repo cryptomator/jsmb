@@ -20,35 +20,35 @@ public sealed interface NtlmSession permits NtlmSession.Initial, NtlmSession.Awa
 	/**
 	 * The initial state of an NTLM session before receiving any messages from the client.
 	 *
-	 * After {@link #negotiate(byte[]) receiving a NEGOTIATE_MESSAGE}, a server challenge is created and the session transitions to {@link AwaitingAuthentication}.
+	 * After {@link #negotiate(byte[], ServerIdentity) receiving a NEGOTIATE_MESSAGE}, a server challenge is created and the session transitions to {@link AwaitingAuthentication}.
 	 */
 	final class Initial implements NtlmSession {
 
 		/**
 		 * Server Receives a NEGOTIATE_MESSAGE from the Client
 		 * @param ntlmMessage The NEGOTIATE_MESSAGE sent by the client to the server to initiate NTLM authentication
+		 * @param identity    The server's NetBIOS / DNS identity — populates the AV pairs and {@code TargetName} in the CHALLENGE_MESSAGE
 		 * @return An NTLM CHALLENGE_MESSAGE
 		 * @throws IllegalArgumentException if the message is not a NEGOTIATE_MESSAGE
 		 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/81d15e3e-3ac3-41f0-920d-846149f3a814">Server Receives a NEGOTIATE_MESSAGE from the Client</a>
 		 */
-		public AwaitingAuthentication negotiate(byte[] ntlmMessage) throws IllegalArgumentException {
+		public AwaitingAuthentication negotiate(byte[] ntlmMessage, ServerIdentity identity) throws IllegalArgumentException {
 			var parsedMessage = NtlmMessage.parse(MemorySegment.ofArray(ntlmMessage));
 			if (!(parsedMessage instanceof NtlmNegotiateMessage negotiateMessage)) {
 				throw new IllegalArgumentException("Expected NEGOTIATE_MESSAGE, got " + parsedMessage);
 			}
 
-			// FIXME: this is a dummy implementation with hardcoded domain etc
 			var targetInfo = List.of(
-					AVPair.create(AVPair.MSV_AV_NB_COMPUTER_NAME, "jsmb"),
-					AVPair.create(AVPair.MSV_AV_NB_DOMAIN_NAME, "jsmb"),
-					AVPair.create(AVPair.MSV_AV_DNS_COMPUTER_NAME, "jsmb"),
-					AVPair.create(AVPair.MSV_AV_DNS_DOMAIN_NAME, ""),
+					AVPair.create(AVPair.MSV_AV_NB_COMPUTER_NAME, identity.netbiosName()),
+					AVPair.create(AVPair.MSV_AV_NB_DOMAIN_NAME, identity.netbiosDomain()),
+					AVPair.create(AVPair.MSV_AV_DNS_COMPUTER_NAME, identity.dnsName()),
+					AVPair.create(AVPair.MSV_AV_DNS_DOMAIN_NAME, identity.dnsDomain()),
 					AVPair.create(AVPair.MSV_AV_TIMESTAMP, Instant.now()),
 					AVPair.create(AVPair.MSV_AV_EOL, MemorySegment.NULL)
 			);
 			int flags = negotiateMessage.negotiateFlags() & NtlmChallengeMessage.WANTED_NEG_FLAGS;
 			flags |= NegotiateFlags.NTLMSSP_TARGET_TYPE_SERVER | NegotiateFlags.NTLMSSP_NEGOTIATE_TARGET_INFO | NegotiateFlags.NTLMSSP_NEGOTIATE_NTLM | NegotiateFlags.NTLMSSP_NEGOTIATE_ALWAYS_SIGN | NegotiateFlags.NTLMSSP_REQUEST_TARGET | NegotiateFlags.NTLMSSP_NEGOTIATE_ALWAYS_SIGN;
-			var challengeMessage = NtlmChallengeMessage.createChallenge("jsmb", targetInfo, flags);
+			var challengeMessage = NtlmChallengeMessage.createChallenge(identity.netbiosName(), targetInfo, flags);
 			return new AwaitingAuthentication(negotiateMessage, challengeMessage);
 		}
 

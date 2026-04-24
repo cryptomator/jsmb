@@ -25,12 +25,12 @@ public class Server implements AutoCloseable {
 	public final Instant startTime;
 	public final Global global;
 
-	private Server(ServerSocket serverSocket, Set<Config> config, Credentials credentials) {
+	private Server(ServerSocket serverSocket, Set<Config> config, Credentials credentials, ServerIdentity identity) {
 		this.guid = UUID.randomUUID();
 		this.startTime = Instant.now();
 		this.serverSocket = serverSocket;
 		this.acceptor = Thread.ofVirtual().name("TCP Connection Listener").uncaughtExceptionHandler(this::handleAcceptException).start(this::acceptConnections);
-		this.global = new Global(config, credentials);
+		this.global = new Global(config, credentials, identity);
 	}
 
 	public int getLocalPort() {
@@ -71,11 +71,29 @@ public class Server implements AutoCloseable {
 	 * @param port        TCP port to listen on, or {@code 0} to pick an ephemeral port
 	 * @param flags       set of enabled toggles; an absent flag is disabled
 	 * @param credentials the single identity this server accepts; held for the server's lifetime
+	 * @return a running server; close it to stop accepting new connections
+	 * @throws IOException if the listening socket cannot be opened
 	 */
 	public static Server start(int port, Set<Config> flags, Credentials credentials) throws IOException {
+		return start(port, flags, credentials, ServerIdentity.DEFAULT);
+	}
+
+	/**
+	 * As {@link #start(int, Set, Credentials)}, but with an explicit {@link ServerIdentity} — override it to announce a
+	 * specific NetBIOS / DNS computer + domain name in the NTLMv2 {@code CHALLENGE_MESSAGE}. The default
+	 * ({@link ServerIdentity#DEFAULT}) mirrors jSMB's historical hardcoded values.
+	 *
+	 * @param port        TCP port to listen on, or {@code 0} to pick an ephemeral port
+	 * @param flags       set of enabled toggles; an absent flag is disabled
+	 * @param credentials the single identity this server accepts; held for the server's lifetime
+	 * @param identity    how this server names itself to NTLMv2 clients
+	 * @return a running server; close it to stop accepting new connections
+	 * @throws IOException if the listening socket cannot be opened
+	 */
+	public static Server start(int port, Set<Config> flags, Credentials credentials, ServerIdentity identity) throws IOException {
 		var serverSocket = new ServerSocket(port);
 		LOG.info("Server started on port {}", serverSocket.getLocalPort());
-		return new Server(serverSocket, flags, credentials);
+		return new Server(serverSocket, flags, credentials, identity);
 	}
 
 	private void acceptConnections() {

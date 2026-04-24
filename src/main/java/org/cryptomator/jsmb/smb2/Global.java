@@ -3,6 +3,7 @@ package org.cryptomator.jsmb.smb2;
 import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.Server;
+import org.cryptomator.jsmb.ServerIdentity;
 import org.cryptomator.jsmb.share.SmbShare;
 
 import java.util.HashMap;
@@ -35,6 +36,9 @@ public class Global {
 	 */
 	public final Credentials credentials;
 
+	// How this server announces itself in the NTLMv2 CHALLENGE_MESSAGE (NetBIOS / DNS computer + domain names).
+	public final ServerIdentity identity;
+
 	public final boolean encryptData;
 	public final boolean rejectUnencryptedAccess;
 	public final boolean requireMessageSigning;
@@ -53,7 +57,12 @@ public class Global {
 	public final boolean isTransportCapabilitiesSupported = false;
 
 	public Global(Set<Config> flags, Credentials credentials) {
+		this(flags, credentials, ServerIdentity.DEFAULT);
+	}
+
+	public Global(Set<Config> flags, Credentials credentials, ServerIdentity identity) {
 		this.credentials = credentials;
+		this.identity = identity;
 		this.encryptData = flags.contains(Config.ENCRYPT_DATA);
 		this.rejectUnencryptedAccess = flags.contains(Config.REJECT_UNENCRYPTED_ACCESS);
 		this.requireMessageSigning = flags.contains(Config.REQUIRE_MESSAGE_SIGNING);

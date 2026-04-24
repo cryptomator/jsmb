@@ -296,7 +296,7 @@ public record Negotiator(Server server, Connection connection) {
 
 			switch (session.ntlmSession) {
 				case NtlmSession.Initial s -> {
-					var awaitingAuthentication = s.negotiate(inboundNtlm);
+					var awaitingAuthentication = s.negotiate(inboundNtlm, connection.global.identity);
 					byte[] outboundSecurityBuffer = rawNtlm
 							? awaitingAuthentication.serverChallenge()
 							: NegTokenResp.acceptIncomplete(awaitingAuthentication.serverChallenge()).negTokenResp().serialize();
