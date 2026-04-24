@@ -22,6 +22,10 @@ public non-sealed interface SmbDirectory extends SmbOpen {
 	 * Reusing this directory's own metadata for both is acceptable; clients don't rely on accurate timestamps /
 	 * sizes on the pseudo-entries. Omitting them makes empty directories round-trip as {@code STATUS_NO_SUCH_FILE},
 	 * which many clients surface to the end user as a hard "not found" error instead of rendering an empty listing.
+	 *
+	 * @param pattern SMB wildcard pattern; {@code null} or {@code "*"} means "all children"
+	 * @return a lazy stream of matching entries; the caller MUST close it
+	 * @throws IOException if the backend cannot enumerate the directory
 	 */
 	Stream<DirEntry> listChildren(String pattern) throws IOException;
 }

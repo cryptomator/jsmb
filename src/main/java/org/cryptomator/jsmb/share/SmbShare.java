@@ -31,16 +31,22 @@ public interface SmbShare {
 	 * @param path   forward-slash delimited path relative to the share root, or {@code ""} / {@code "/"} for the root itself
 	 * @param params NT access / share / disposition / options passed through from {@code CREATE}
 	 * @return an open handle; never {@code null}
+	 * @throws IOException if the backend refuses the open; see the class-level mapping to NT status codes
 	 */
 	SmbOpen open(String path, OpenParams params) throws IOException;
 
 	/**
 	 * Returns volume-level attributes used by {@code QUERY_INFO} / {@code FileFsAttributeInformation}.
+	 *
+	 * @return the volume's attribute flags, max component length, and filesystem-type name
 	 */
 	FsAttributes fsAttributes();
 
 	/**
 	 * Returns volume size information used by {@code QUERY_INFO} / {@code FileFsSizeInformation}.
+	 *
+	 * @return the volume's total / free unit counts and sector geometry
+	 * @throws IOException if the backend cannot retrieve current volume sizing
 	 */
 	FsSize fsSize() throws IOException;
 }

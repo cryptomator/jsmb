@@ -16,6 +16,9 @@ public record OpenParams(int desiredAccess,
 						 int createOptions) {
 
 	/**
+	 * Typed projection of the {@code CreateDisposition} u32 — how the server should react when the target
+	 * file does or does not already exist.
+	 *
 	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/e8fb45c1-a03d-44ca-b7ae-47385cfd7997">MS-SMB2 2.2.13 CreateDisposition</a>
 	 */
 	public enum Disposition {
@@ -32,6 +35,13 @@ public record OpenParams(int desiredAccess,
 		/** Open existing (truncate) or create if absent. ({@code FILE_OVERWRITE_IF}, value 5) */
 		OVERWRITE_IF;
 
+		/**
+		 * Parses the on-wire u32 {@code CreateDisposition} into its typed form.
+		 *
+		 * @param value one of the {@code FILE_*} constants from MS-SMB2 2.2.13
+		 * @return the corresponding enum value
+		 * @throws IllegalArgumentException if {@code value} is not a known disposition
+		 */
 		public static Disposition fromWireValue(int value) {
 			return switch (value) {
 				case 0 -> SUPERSEDE;

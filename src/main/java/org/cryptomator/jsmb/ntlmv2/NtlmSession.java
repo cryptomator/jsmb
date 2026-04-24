@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb.ntlmv2;
 
+import org.cryptomator.jsmb.ServerIdentity;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.util.Bytes;
 
@@ -11,8 +12,18 @@ import java.util.List;
 
 import static org.cryptomator.jsmb.ntlmv2.NegotiateFlags.isSet;
 
+/**
+ * State machine for an NTLMv2 authentication exchange. An instance starts in {@link Initial}, becomes
+ * {@link AwaitingAuthentication} after the client's {@code NEGOTIATE_MESSAGE}, and terminates as
+ * {@link Authenticated} once its {@code AUTHENTICATE_MESSAGE} is verified.
+ */
 public sealed interface NtlmSession permits NtlmSession.Initial, NtlmSession.AwaitingAuthentication, NtlmSession.Authenticated {
 
+	/**
+	 * Starts a new NTLMv2 exchange.
+	 *
+	 * @return a fresh session in the {@link Initial} state
+	 */
 	static NtlmSession.Initial create() {
 		return new Initial();
 	}
@@ -147,6 +158,13 @@ public sealed interface NtlmSession permits NtlmSession.Initial, NtlmSession.Awa
 
 	}
 
+	/**
+	 * Terminal state: the client's {@code AUTHENTICATE_MESSAGE} has been verified and the per-session keys are derived.
+	 *
+	 * @param exportedSessionKey the NTLMv2 exported session key (input to SMB2 key derivation)
+	 * @param clientSigningKey   signing key used for client-to-server messages
+	 * @param serverSigningKey   signing key used for server-to-client messages
+	 */
 	record Authenticated(byte[] exportedSessionKey, byte[] clientSigningKey, byte[] serverSigningKey) implements NtlmSession {
 	}
 }

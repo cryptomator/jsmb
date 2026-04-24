@@ -46,6 +46,9 @@ public enum Config {
 	/**
 	 * Builds an {@link EnumSet} of the supplied flags. Duplicate values are tolerated; an empty
 	 * call returns an empty set.
+	 *
+	 * @param flags flags to enable
+	 * @return a mutable set containing every distinct value in {@code flags}
 	 */
 	public static EnumSet<Config> create(Config... flags) {
 		var set = EnumSet.noneOf(Config.class);

@@ -1,3 +1,7 @@
+/**
+ * Partial SMB server implementing dialect 3.1.1. Embedders use {@link org.cryptomator.jsmb.Server} to expose
+ * {@link org.cryptomator.jsmb.share.SmbShare} backends over TCP.
+ */
 module org.cryptomator.jsmb {
 	requires org.slf4j;
 	requires static org.jetbrains.annotations;

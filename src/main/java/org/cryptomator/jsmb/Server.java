@@ -14,6 +14,10 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * The entry point for embedders: bind a TCP port, register one or more {@link SmbShare shares}, and let
+ * the server accept connections until {@link #close()} is called.
+ */
 public class Server implements AutoCloseable {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Server.class);
@@ -21,8 +25,11 @@ public class Server implements AutoCloseable {
 	private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 	private final ServerSocket serverSocket;
 	private final Thread acceptor;
+	/** Server GUID advertised in {@code NEGOTIATE} responses; freshly generated per instance. */
 	public final UUID guid;
+	/** Instant this server instance was constructed, reported as {@code ServerStartTime} in {@code NEGOTIATE}. */
 	public final Instant startTime;
+	/** Per-server global state (registered shares, config flags, credentials) shared across all connections. */
 	public final Global global;
 
 	private Server(ServerSocket serverSocket, Set<Config> config, Credentials credentials, ServerIdentity identity) {
@@ -42,6 +49,8 @@ public class Server implements AutoCloseable {
 	 * to {@code \\host\<name>} are routed to it. May be called at any time, even after the server is
 	 * running; new tree-connects see the updated set while already-open handles are unaffected.
 	 *
+	 * @param name  share name clients will connect to (case-insensitive on the wire)
+	 * @param share backend serving the share
 	 * @throws IllegalArgumentException if a share is already registered under {@code name}
 	 */
 	public void registerShare(String name, SmbShare share) {
@@ -54,6 +63,11 @@ public class Server implements AutoCloseable {
 
 	/**
 	 * Starts a new server with {@link Config#DEFAULT}.
+	 *
+	 * @param port        TCP port to listen on, or {@code 0} to pick an ephemeral port
+	 * @param credentials the single identity this server accepts; held for the server's lifetime
+	 * @return a running server; close it to stop accepting new connections
+	 * @throws IOException if the listening socket cannot be opened
 	 */
 	public static Server start(int port, Credentials credentials) throws IOException {
 		return start(port, Config.DEFAULT, credentials);

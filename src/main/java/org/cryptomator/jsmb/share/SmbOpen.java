@@ -20,21 +20,43 @@ public sealed interface SmbOpen extends AutoCloseable permits SmbFile, SmbDirect
 	 * The {@code CREATE} handler needs this to distinguish {@code FILE_OPENED} vs {@code FILE_CREATED} for
 	 * {@code FILE_OPEN_IF}, and {@code FILE_OVERWRITTEN} vs {@code FILE_CREATED} for {@code FILE_OVERWRITE_IF}
 	 * (MS-SMB2 2.2.14 {@code CreateAction}).
+	 *
+	 * @return {@code true} iff the target already existed before this open created it
 	 */
 	boolean existedBeforeOpen();
 
+	/**
+	 * Reads the target's basic metadata.
+	 *
+	 * @return timestamps and attribute bits for {@code QUERY_INFO} / {@code FileBasicInformation}
+	 * @throws IOException if the backend cannot read the metadata
+	 */
 	FileBasicInfo queryBasic() throws IOException;
 
+	/**
+	 * Reads the target's standard metadata.
+	 *
+	 * @return allocation / EOF sizes and link / deletion / directory flags for {@code QUERY_INFO} / {@code FileStandardInformation}
+	 * @throws IOException if the backend cannot read the metadata
+	 */
 	FileStandardInfo queryStandard() throws IOException;
 
 	/**
 	 * Update timestamps and attribute bits. A non-null field overwrites; a null {@code Instant}
 	 * leaves the existing timestamp unchanged, and {@code fileAttributes == 0} leaves attributes alone.
+	 *
+	 * @param info new values to apply; null fields mean "leave as-is"
+	 * @throws IOException if the backend cannot persist the update
 	 */
 	void setBasic(FileBasicInfo info) throws IOException;
 
 	/**
 	 * Rename (and/or move) this open's target to {@code newPath} relative to the share root.
+	 *
+	 * @param newPath         forward-slash delimited destination path, relative to the share root
+	 * @param replaceIfExists if {@code true}, atomically overwrite an existing entry at {@code newPath}
+	 * @throws IOException if the destination exists and {@code replaceIfExists} is {@code false}, or if the
+	 *                     backend cannot perform the rename
 	 */
 	void rename(String newPath, boolean replaceIfExists) throws IOException;
 

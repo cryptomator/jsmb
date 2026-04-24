@@ -1,7 +1,7 @@
 package org.cryptomator.jsmb.share;
 
 /**
- * A single entry returned by {@link SmbOpen#listChildren(String)}. Carries enough metadata to
+ * A single entry returned by {@link SmbDirectory#listChildren(String)}. Carries enough metadata to
  * render any of the {@code FileXxxDirectoryInformation} classes required by {@code QUERY_DIRECTORY}.
  *
  * @param name     the child's name (UTF-16 at the wire level; a {@link String} here)
