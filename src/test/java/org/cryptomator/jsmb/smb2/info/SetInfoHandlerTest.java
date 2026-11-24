@@ -100,6 +100,23 @@ class SetInfoHandlerTest {
 		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
 		Assertions.assertFalse(Files.exists(targetFile));
 		Assertions.assertTrue(Files.exists(shareRoot.resolve(newName)));
+		Assertions.assertEquals(newName, fileOpen.path);
+	}
+
+	@Test
+	@DisplayName("FileRenameInformation with a backslash-delimited target updates the open's path, forward-slash delimited")
+	void renameIntoSubdirectory() throws IOException {
+		Files.createDirectory(shareRoot.resolve("sub"));
+		byte[] nameBytes = "\\sub\\renamed.bin".getBytes(StandardCharsets.UTF_16LE);
+		byte[] payload = new byte[20 + nameBytes.length];
+		MemorySegment.ofArray(payload).set(Layouts.LE_INT32, 16, nameBytes.length);
+		System.arraycopy(nameBytes, 0, payload, 20, nameBytes.length);
+
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, payload));
+
+		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+		Assertions.assertTrue(Files.exists(shareRoot.resolve("sub/renamed.bin")));
+		Assertions.assertEquals("sub/renamed.bin", fileOpen.path);
 	}
 
 	@Test

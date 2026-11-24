@@ -28,9 +28,9 @@ public class Open {
 	/**
 	 * Normalised path relative to the share root, as passed to {@code SmbShare.open(...)}.
 	 * Forward-slash delimited (translation from backslashes happens in the CREATE handler).
-	 * Empty string for the share root.
+	 * Empty string for the share root. Changes when the open gets renamed.
 	 */
-	public final String path;
+	public String path;
 
 	/**
 	 * Cached snapshot of the directory listing for the current {@code QUERY_DIRECTORY} enumeration.

@@ -153,7 +153,11 @@ public record SetInfoHandler(Connection connection) {
 			return NTStatus.STATUS_INFO_LENGTH_MISMATCH;
 		}
 		byte[] nameBytes = buffer.asSlice(20, nameLength).toArray(Layouts.BYTE);
-		var newPath = new String(nameBytes, StandardCharsets.UTF_16LE);
+		// The wire format is backslash-delimited and relative to the share root. Backends and Open.path use forward slashes without a leading one.
+		var newPath = new String(nameBytes, StandardCharsets.UTF_16LE).replace('\\', '/');
+		while (newPath.startsWith("/")) {
+			newPath = newPath.substring(1);
+		}
 		try {
 			open.backend.rename(newPath, replaceIfExists);
 		} catch (NoSuchFileException e) {
@@ -163,6 +167,7 @@ public record SetInfoHandler(Connection connection) {
 		} catch (AccessDeniedException e) {
 			return NTStatus.STATUS_ACCESS_DENIED;
 		}
+		open.path = newPath; // name and ID queries on this handle are answered from it
 		LOG.debug("SET_INFO fileId={} renamed to '{}' (replace={})", open.fileId, newPath, replaceIfExists);
 		return NTStatus.STATUS_SUCCESS;
 	}
