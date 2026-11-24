@@ -3,6 +3,7 @@ package org.cryptomator.jsmb.smb2;
 import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.common.NTStatus;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,8 +14,11 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.foreign.MemorySegment;
 import java.util.HexFormat;
+import java.util.OptionalInt;
 
 class RequestVerifierTest {
+
+	private static final int TREE_ID = 1;
 
 	private Connection connection;
 	private RequestVerifier verifier;
@@ -32,9 +36,9 @@ class RequestVerifierTest {
 	void sessionlessCommands(Command command) {
 		var request = request(command, 0L);
 
-		var rejection = verifier.verify(request, null);
+		var rejection = verify(request, null);
 
-		Assertions.assertNull(rejection);
+		Assertions.assertTrue(rejection.isEmpty());
 	}
 
 	@Test
@@ -42,10 +46,9 @@ class RequestVerifierTest {
 	void unknownSession() {
 		var request = request(Command.TREE_CONNECT, 0x1234L);
 
-		var rejection = verifier.verify(request, null);
+		var rejection = verify(request, null);
 
-		Assertions.assertNotNull(rejection);
-		Assertions.assertEquals(NTStatus.STATUS_USER_SESSION_DELETED, rejection.header().status());
+		Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_USER_SESSION_DELETED), rejection);
 	}
 
 	@ParameterizedTest(name = "{0}")
@@ -55,36 +58,99 @@ class RequestVerifierTest {
 		var session = Session.create(connection);
 		var request = request(command, session.sessionId);
 
-		var rejection = verifier.verify(request, null);
+		var rejection = verify(request, null);
 
-		Assertions.assertNotNull(rejection);
-		Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, rejection.header().status());
-		Assertions.assertEquals(command.value(), rejection.header().command());
+		Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED), rejection);
 	}
 
 	@ParameterizedTest(name = "{0}")
 	@DisplayName("LOGOFF, CLOSE and LOCK pass on a session that hasn't completed authentication")
 	@EnumSource(value = Command.class, names = {"LOGOFF", "CLOSE", "LOCK"})
 	void sessionInProgressExemptCommands(Command command) {
-		var session = Session.create(connection);
+		var session = sessionWithTree(); // for its tree connect, which CLOSE and LOCK need to get past the checks following the one under test
+		session.state = Session.State.IN_PROGRESS;
 		var request = request(command, session.sessionId);
 
-		var rejection = verifier.verify(request, null);
+		var rejection = verify(request, null);
 
-		Assertions.assertNull(rejection);
+		Assertions.assertTrue(rejection.isEmpty());
 	}
 
 	@ParameterizedTest(name = "{0}")
-	@DisplayName("Every command passes on a valid session")
+	@DisplayName("Every command passes on a valid session with a tree connect")
 	@EnumSource(Command.class)
 	void validSession(Command command) {
-		var session = Session.create(connection);
-		session.state = Session.State.VALID;
+		var session = sessionWithTree();
 		var request = request(command, session.sessionId);
 
-		var rejection = verifier.verify(request, null);
+		var rejection = verify(request, null);
 
-		Assertions.assertNull(rejection);
+		Assertions.assertTrue(rejection.isEmpty());
+	}
+
+	@Nested
+	@DisplayName("Tree connect verification")
+	class Tree {
+
+		private Session session;
+
+		@BeforeEach
+		void setUp() {
+			session = sessionWithTree();
+		}
+
+		@ParameterizedTest(name = "{0}")
+		@DisplayName("A request for an unknown TreeId is rejected with STATUS_NETWORK_NAME_DELETED")
+		@EnumSource(value = Command.class, names = {"TREE_DISCONNECT", "CREATE", "CLOSE", "FLUSH", "READ", "WRITE", "LOCK", "IOCTL", "QUERY_DIRECTORY", "CHANGE_NOTIFY", "QUERY_INFO", "SET_INFO", "OPLOCK_BREAK"})
+		void unknownTree(Command command) {
+			var request = request(command, session.sessionId);
+
+			var rejection = verifier.verify(request, session.sessionId, TREE_ID + 1, null);
+
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_NETWORK_NAME_DELETED), rejection);
+		}
+
+		@ParameterizedTest(name = "{0}")
+		@DisplayName("Commands not bound to a tree connect pass with an unknown TreeId")
+		@EnumSource(value = Command.class, names = {"LOGOFF", "TREE_CONNECT"})
+		void treelessCommands(Command command) {
+			var request = request(command, session.sessionId);
+
+			var rejection = verifier.verify(request, session.sessionId, TREE_ID + 1, null);
+
+			Assertions.assertTrue(rejection.isEmpty());
+		}
+
+		@Test
+		@DisplayName("A request that needs a tree connect but has no TreeId is rejected with STATUS_INVALID_PARAMETER")
+		void missingTreeId() {
+			var request = request(Command.CREATE, session.sessionId);
+
+			var rejection = verifier.verify(request, session.sessionId, null, null);
+
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_INVALID_PARAMETER), rejection);
+		}
+
+		@Test
+		@DisplayName("A request that needs a session but has no SessionId is rejected with STATUS_INVALID_PARAMETER")
+		void missingSessionId() {
+			var request = request(Command.CREATE, session.sessionId);
+
+			var rejection = verifier.verify(request, null, TREE_ID, null);
+
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_INVALID_PARAMETER), rejection);
+		}
+
+		@Test
+		@DisplayName("The SessionId and TreeId passed in take precedence over those in the request's header")
+		void inheritedIdentifiers() {
+			var header = PacketHeader.builder().command(Command.CLOSE.value()).sessionId(-1L).treeId(-1).flags(SMB2Message.Flags.RELATED_OPERATIONS).build();
+			var request = new UnhandledRequest(header, MemorySegment.ofArray(new byte[0]));
+
+			var rejection = verifier.verify(request, session.sessionId, TREE_ID, null);
+
+			Assertions.assertTrue(rejection.isEmpty());
+		}
 	}
 
 	@Nested
@@ -95,8 +161,7 @@ class RequestVerifierTest {
 
 		@BeforeEach
 		void setUp() {
-			session = Session.create(connection);
-			session.state = Session.State.VALID;
+			session = sessionWithTree();
 			session.encryptData = true;
 		}
 
@@ -106,10 +171,9 @@ class RequestVerifierTest {
 		void unencryptedRequestOnEncryptedSession(Command command) {
 			var request = request(command, session.sessionId);
 
-			var rejection = verifier.verify(request, null);
+			var rejection = verify(request, null);
 
-			Assertions.assertNotNull(rejection);
-			Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, rejection.header().status());
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED), rejection);
 		}
 
 		@Test
@@ -117,9 +181,9 @@ class RequestVerifierTest {
 		void encryptedRequestOnEncryptedSession() {
 			var request = request(Command.TREE_CONNECT, session.sessionId);
 
-			var rejection = verifier.verify(request, session.sessionId);
+			var rejection = verify(request, session.sessionId);
 
-			Assertions.assertNull(rejection);
+			Assertions.assertTrue(rejection.isEmpty());
 		}
 
 		@ParameterizedTest(name = "{0}")
@@ -128,23 +192,21 @@ class RequestVerifierTest {
 		void unencryptedSessionlessCommands(Command command) {
 			var request = request(command, session.sessionId);
 
-			var rejection = verifier.verify(request, null);
+			var rejection = verify(request, null);
 
-			Assertions.assertNull(rejection);
+			Assertions.assertTrue(rejection.isEmpty());
 		}
 
 		@Test
 		@DisplayName("A request wrapped in another session's transform is rejected with STATUS_ACCESS_DENIED even if its session doesn't encrypt data")
 		void foreignTransformOnUnencryptedSession() {
-			var otherSession = Session.create(connection);
-			otherSession.state = Session.State.VALID;
+			var otherSession = sessionWithTree();
 			session.encryptData = false;
 			var request = request(Command.TREE_CONNECT, session.sessionId);
 
-			var rejection = verifier.verify(request, otherSession.sessionId);
+			var rejection = verify(request, otherSession.sessionId);
 
-			Assertions.assertNotNull(rejection);
-			Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, rejection.header().status());
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED), rejection);
 		}
 	}
 
@@ -160,8 +222,7 @@ class RequestVerifierTest {
 		@BeforeEach
 		void setUp() {
 			connection.dialect = "3.1.1"; // AES-CMAC, as no signing algorithm got negotiated
-			session = Session.create(connection);
-			session.state = Session.State.VALID;
+			session = sessionWithTree();
 			session.signingKey = KEY;
 		}
 
@@ -170,9 +231,9 @@ class RequestVerifierTest {
 		void validSignature() {
 			var request = request(Command.TREE_CONNECT, session.sessionId).sign(KEY, connection);
 
-			var rejection = verifier.verify(request, null);
+			var rejection = verify(request, null);
 
-			Assertions.assertNull(rejection);
+			Assertions.assertTrue(rejection.isEmpty());
 		}
 
 		@Test
@@ -180,10 +241,20 @@ class RequestVerifierTest {
 		void invalidSignature() {
 			var request = request(Command.TREE_CONNECT, session.sessionId).sign(OTHER_KEY, connection);
 
-			var rejection = verifier.verify(request, null);
+			var rejection = verify(request, null);
 
-			Assertions.assertNotNull(rejection);
-			Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, rejection.header().status());
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED), rejection);
+		}
+
+		@Test
+		@DisplayName("The signature of a related request is verified over its header as sent, with the key of the session it inherits")
+		void signatureOfRelatedRequest() {
+			var header = PacketHeader.builder().command(Command.CLOSE.value()).sessionId(-1L).treeId(-1).flags(SMB2Message.Flags.RELATED_OPERATIONS).build();
+			var request = new UnhandledRequest(header, MemorySegment.ofArray(new byte[0])).sign(KEY, connection);
+
+			var rejection = verifier.verify(request, session.sessionId, TREE_ID, null);
+
+			Assertions.assertTrue(rejection.isEmpty());
 		}
 
 		@Test
@@ -191,10 +262,9 @@ class RequestVerifierTest {
 		void signedNegotiate() {
 			var request = request(Command.NEGOTIATE, 0L, SMB2Message.Flags.SIGNED);
 
-			var rejection = verifier.verify(request, null);
+			var rejection = verify(request, null);
 
-			Assertions.assertNotNull(rejection);
-			Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, rejection.header().status());
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_INVALID_PARAMETER), rejection);
 		}
 
 		@Test
@@ -202,10 +272,9 @@ class RequestVerifierTest {
 		void signedRequestForUnknownSession() {
 			var request = request(Command.ECHO, 0x1234L, SMB2Message.Flags.SIGNED);
 
-			var rejection = verifier.verify(request, null);
+			var rejection = verify(request, null);
 
-			Assertions.assertNotNull(rejection);
-			Assertions.assertEquals(NTStatus.STATUS_USER_SESSION_DELETED, rejection.header().status());
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_USER_SESSION_DELETED), rejection);
 		}
 
 		@Test
@@ -214,10 +283,9 @@ class RequestVerifierTest {
 			session.signingKey = null;
 			var request = request(Command.TREE_CONNECT, session.sessionId, SMB2Message.Flags.SIGNED);
 
-			var rejection = verifier.verify(request, null);
+			var rejection = verify(request, null);
 
-			Assertions.assertNotNull(rejection);
-			Assertions.assertEquals(NTStatus.STATUS_NOT_SUPPORTED, rejection.header().status());
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_NOT_SUPPORTED), rejection);
 		}
 
 		@Test
@@ -226,10 +294,9 @@ class RequestVerifierTest {
 			session.signingRequired = true;
 			var request = request(Command.TREE_CONNECT, session.sessionId);
 
-			var rejection = verifier.verify(request, null);
+			var rejection = verify(request, null);
 
-			Assertions.assertNotNull(rejection);
-			Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, rejection.header().status());
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED), rejection);
 		}
 
 		@Test
@@ -238,9 +305,9 @@ class RequestVerifierTest {
 			session.signingRequired = false;
 			var request = request(Command.TREE_CONNECT, session.sessionId);
 
-			var rejection = verifier.verify(request, null);
+			var rejection = verify(request, null);
 
-			Assertions.assertNull(rejection);
+			Assertions.assertTrue(rejection.isEmpty());
 		}
 
 		@Test
@@ -249,9 +316,9 @@ class RequestVerifierTest {
 			session.signingRequired = true;
 			var request = request(Command.TREE_CONNECT, session.sessionId);
 
-			var rejection = verifier.verify(request, session.sessionId);
+			var rejection = verify(request, session.sessionId);
 
-			Assertions.assertNull(rejection);
+			Assertions.assertTrue(rejection.isEmpty());
 		}
 
 		@Test
@@ -259,10 +326,23 @@ class RequestVerifierTest {
 		void signatureOfEncryptedRequestIsIgnored() {
 			var request = request(Command.TREE_CONNECT, session.sessionId).sign(OTHER_KEY, connection);
 
-			var rejection = verifier.verify(request, session.sessionId);
+			var rejection = verify(request, session.sessionId);
 
-			Assertions.assertNull(rejection);
+			Assertions.assertTrue(rejection.isEmpty());
 		}
+	}
+
+	// verifies a request that is processed with the identifiers of its own header, i.e. one that isn't a related operation
+	private OptionalInt verify(SMB2Message request, @Nullable Long transformSessionId) {
+		return verifier.verify(request, request.header().sessionId(), request.header().treeId(), transformSessionId);
+	}
+
+	// an authenticated session with a tree connect for TREE_ID
+	private Session sessionWithTree() {
+		var session = Session.create(connection);
+		session.state = Session.State.VALID;
+		session.treeConnectTable.put(TREE_ID, new TreeConnect(TREE_ID, "data", null, 0));
+		return session;
 	}
 
 	private static SMB2Message request(Command command, long sessionId) {
@@ -270,7 +350,7 @@ class RequestVerifierTest {
 	}
 
 	private static SMB2Message request(Command command, long sessionId, int flags) {
-		var header = PacketHeader.builder().command(command.value()).sessionId(sessionId).flags(flags).build();
+		var header = PacketHeader.builder().command(command.value()).sessionId(sessionId).treeId(TREE_ID).flags(flags).build();
 		return new UnhandledRequest(header, MemorySegment.ofArray(new byte[0]));
 	}
 }

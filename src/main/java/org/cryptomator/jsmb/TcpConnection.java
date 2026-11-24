@@ -7,6 +7,7 @@ import org.cryptomator.jsmb.smb1.SMB1MessageParser;
 import org.cryptomator.jsmb.smb1.SMB1Negotiator;
 import org.cryptomator.jsmb.smb1.SmbComNegotiateRequest;
 import org.cryptomator.jsmb.smb2.Command;
+import org.cryptomator.jsmb.smb2.CompoundChain;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.smb2.FileIdCarrying;
@@ -181,14 +182,26 @@ class TcpConnection implements Runnable {
 		boolean requestEncrypted = transformSessionId != null;
 		int offset = 0;
 		int nextCommand;
+		var chain = new CompoundChain();
 		FileId chainedFileId = null;
 		do {
 			var msg = SMB2MessageParser.parse(segment.asSlice(offset));
-			if (msg instanceof FileIdCarrying msgWithFile && chainedFileId != null && msg.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS)) {
-				msgWithFile.substituteFileIdIfSentinel(chainedFileId);
+			var sessionId = chain.sessionId(msg);
+			var treeId = chain.treeId(msg);
+			var rejection = requestVerifier.verify(msg, sessionId, treeId, transformSessionId);
+			// Only now make a related request say what it is processed with: its signature had to be verified over the bytes as sent.
+			if (msg.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS)) {
+				if (sessionId != null) {
+					msg.header().sessionId(sessionId);
+				}
+				if (treeId != null) {
+					msg.header().treeId(treeId);
+				}
+				if (msg instanceof FileIdCarrying msgWithFile && chainedFileId != null) {
+					msgWithFile.substituteFileIdIfSentinel(chainedFileId);
+				}
 			}
-			var rejection = requestVerifier.verify(msg, transformSessionId);
-			SMB2Message response = rejection != null ? rejection : switch (msg) {
+			SMB2Message response = rejection.isPresent() ? reject(msg, rejection.getAsInt()) : switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
 				case LogoffRequest request -> runtime.logoff(request);
@@ -217,10 +230,7 @@ class TcpConnection implements Runnable {
 				}
 				default -> throw new MalformedMessageException("Unexpected SMB2 message type: " + msg.getClass().getSimpleName());
 			};
-			if (rejection != null && msg instanceof CancelRequest) {
-				// CANCEL is one-way, so not even its rejection is answered. An error carrying the MessageId of the request to be cancelled would be mistaken for that request's response.
-				response = null;
-			}
+			chain.processed(msg, response);
 			// Advance the chain cursor before the null-response guard so `continue` still makes progress.
 			nextCommand = msg.header().nextCommand();
 			offset += nextCommand;
@@ -234,6 +244,14 @@ class TcpConnection implements Runnable {
 			var signed = sign(msg, response);
 			writeWire(maybeEncrypt(signed, requestEncrypted));
 		} while (nextCommand != 0);
+	}
+
+	private static @Nullable SMB2Message reject(SMB2Message request, int status) {
+		if (request instanceof CancelRequest) {
+			// CANCEL is one-way, so not even its rejection is answered. An error carrying the MessageId of the request to be cancelled would be mistaken for that request's response.
+			return null;
+		}
+		return ErrorResponse.create(request, status);
 	}
 
 	/**

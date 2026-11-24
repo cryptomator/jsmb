@@ -37,6 +37,8 @@ It is **test-only** and intentionally happy-path — production-grade backends a
    - `SMB1MessageParser.isSmb1` / `SMB2MessageParser.isSmb2` then discriminate the plaintext.
    - SMB1 only handles `SmbComNegotiateRequest` (multi-protocol negotiate → upgrade to SMB2) via `SMB1Negotiator`.
    - SMB2 loops over chained (`nextCommand`) commands, dispatched via a pattern-match switch to `Negotiator`, `Runtime`, `TreeConnectHandler`, `CreateHandler`, `IoctlHandler`, or — for not-yet-implemented commands — an `UnhandledRequest` that gets a `STATUS_NOT_SUPPORTED` reply (keeps the connection alive so clients can probe optional commands without a TCP reset).
+   - Before a command reaches its handler, `smb2.RequestVerifier` checks its signature, session and tree connect (MS-SMB2 3.3.5.2.4, 3.3.5.2.9, 3.3.5.2.11) and may reject it with an error status. Handlers can therefore rely on an authenticated session and, for tree-bound commands, a valid `TreeId`.
+   - A compounded related request is processed with the `SessionId` and `TreeId` of the operation before it, tracked by `smb2.CompoundChain` (MS-SMB2 3.3.5.2.7.2), and its header is rewritten accordingly once verified.
 3. Each response passes through `TcpConnection.sign(...)` (MS-SMB2 3.3.4.1.5 signing decision tree) and then `TcpConnection.maybeEncrypt(...)` (MS-SMB2 3.3.4.1.4 encryption decision — which also **mirrors the request's encryption state**, so a client-encrypted request gets an encrypted response even when `Session.EncryptData` is false).
 
 ### State hierarchy

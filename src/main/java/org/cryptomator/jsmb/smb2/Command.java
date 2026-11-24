@@ -48,4 +48,20 @@ public enum Command {
 		}
 		throw new IllegalArgumentException("Unknown command value: " + value);
 	}
+
+	/**
+	 * Tells whether a command code denotes one of the given commands.
+	 *
+	 * @param value      numerical value of the command, as found in an SMB2 header
+	 * @param candidates the commands to compare it to
+	 * @return {@code true} if {@code value} is the value of any of the candidates
+	 */
+	public static boolean isAnyOf(char value, Command... candidates) {
+		for (Command candidate : candidates) {
+			if (candidate.value == value) {
+				return true;
+			}
+		}
+		return false;
+	}
 }

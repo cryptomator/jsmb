@@ -11,6 +11,7 @@ import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.auth.AuthenticationContext;
 import com.hierynomus.smbj.connection.Connection;
 import com.hierynomus.smbj.session.Session;
+import com.hierynomus.smbj.share.Share;
 import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.Server;
 import org.junit.jupiter.api.AfterAll;
@@ -39,6 +40,8 @@ public class IoctlIT {
 	private SMBClient client;
 	private Connection connection;
 	private Session session;
+	private Share ipc;
+	private long treeId;
 
 	@BeforeAll
 	public void setup() throws IOException {
@@ -51,10 +54,14 @@ public class IoctlIT {
 		client = new SMBClient(config);
 		connection = client.connect("localhost", server.getLocalPort());
 		session = connection.authenticate(new AuthenticationContext("user", "password".toCharArray(), "DOMAIN"));
+		// IOCTL requires a tree connect, even for FSCTLs that don't operate on a file (MS-SMB2 3.3.5.15)
+		ipc = session.connectShare("IPC$");
+		treeId = ipc.getTreeConnect().getTreeId();
 	}
 
 	@AfterAll
 	public void tearDown() throws IOException {
+		if (ipc != null) ipc.close();
 		if (connection != null) connection.close();
 		if (client != null) client.close();
 		if (server != null) server.close();
@@ -66,7 +73,7 @@ public class IoctlIT {
 	public void validateNegotiateInfoIsRejectedWithFileClosed() throws Exception {
 		var request = new SMB2IoctlRequest(SMB2Dialect.SMB_3_1_1,
 				session.getSessionId(),
-				0L, // no tree connect for VALIDATE_NEGOTIATE_INFO
+				treeId,
 				FSCTL_VALIDATE_NEGOTIATE_INFO,
 				FILE_ID_NONE,
 				new ArrayByteChunkProvider(new byte[0], 0), // no input — server rejects before parsing per MS-SMB2 3.3.5.15.12
@@ -80,11 +87,29 @@ public class IoctlIT {
 
 	@Test
 	@Order(2)
+	@DisplayName("An IOCTL without tree connect is rejected with STATUS_NETWORK_NAME_DELETED")
+	public void ioctlWithoutTreeConnectIsRejected() throws Exception {
+		var request = new SMB2IoctlRequest(SMB2Dialect.SMB_3_1_1,
+				session.getSessionId(),
+				0L, // never handed out as TreeId
+				FSCTL_VALIDATE_NEGOTIATE_INFO,
+				FILE_ID_NONE,
+				new ArrayByteChunkProvider(new byte[0], 0),
+				true,
+				64);
+
+		var response = session.<SMB2IoctlResponse>send(request).get(5, TimeUnit.SECONDS);
+
+		Assertions.assertEquals(NtStatus.STATUS_NETWORK_NAME_DELETED.getValue(), response.getHeader().getStatusCode());
+	}
+
+	@Test
+	@Order(3)
 	@DisplayName("Unknown FSCTL is rejected with STATUS_INVALID_DEVICE_REQUEST")
 	public void unknownFsctlIsRejectedWithInvalidDeviceRequest() throws Exception {
 		var request = new SMB2IoctlRequest(SMB2Dialect.SMB_3_1_1,
 				session.getSessionId(),
-				0L,
+				treeId,
 				FSCTL_UNRECOGNIZED,
 				FILE_ID_NONE,
 				new ArrayByteChunkProvider(new byte[0], 0),

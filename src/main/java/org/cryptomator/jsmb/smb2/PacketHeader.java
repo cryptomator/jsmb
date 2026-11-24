@@ -77,8 +77,30 @@ public record PacketHeader(MemorySegment segment) {
 		}
 	}
 
+	/**
+	 * Overwrites the TreeId in place.
+	 *
+	 * @param treeId the TreeId this message is processed with
+	 */
+	public void treeId(int treeId) {
+		if (!hasFlag(SMB2Message.Flags.ASYNC_COMMAND)) {
+			segment.set(Layouts.LE_INT32, 36, treeId);
+		} else {
+			throw new UnsupportedOperationException("Not a sync command");
+		}
+	}
+
 	public long sessionId() {
 		return segment.get(Layouts.LE_INT64, 40);
+	}
+
+	/**
+	 * Overwrites the SessionId in place.
+	 *
+	 * @param sessionId the SessionId this message is processed with
+	 */
+	public void sessionId(long sessionId) {
+		segment.set(Layouts.LE_INT64, 40, sessionId);
 	}
 
 	public byte[] signature() {
