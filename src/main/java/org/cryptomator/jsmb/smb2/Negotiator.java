@@ -224,6 +224,10 @@ public record Negotiator(Server server, Connection connection) {
 		if (global.rejectUnencryptedAccess && (connection.clientCapabilities & SMB2_GLOBAL_CAP_ENCRYPTION) == 0) { //Step 2
 			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
+		// Step 2 is written for dialects 3.0 and 3.0.2, where the capability bit is all there is to negotiate. In 3.1.1 the bit doesn't tell whether a cipher got agreed upon, and without one the session would end up unencrypted.
+		if (global.rejectUnencryptedAccess && connection.cipherId == EncryptionCapabilities.NO_COMMON_CIPHER) {
+			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
+		}
 		final Session session;
 		if (request.header().sessionId() == 0L) { //Step 3
 			//See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/ea10b7ae-b053-4e4c-ab31-a48f7d0a79af

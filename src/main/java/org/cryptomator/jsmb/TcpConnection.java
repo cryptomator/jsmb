@@ -47,6 +47,7 @@ import org.cryptomator.jsmb.smb2.tree.TreeConnectHandler;
 import org.cryptomator.jsmb.smb2.tree.TreeConnectRequest;
 import org.cryptomator.jsmb.smb2.tree.TreeDisconnectRequest;
 import org.cryptomator.jsmb.util.Layouts;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -127,8 +128,9 @@ class TcpConnection implements Runnable {
 				MemorySegment messageSegment = MemorySegment.ofArray(message);
 
 				// 3. if encrypted (SMB2 TRANSFORM_HEADER), decrypt into plaintext:
-				boolean requestEncrypted = isTransformHeader(messageSegment);
-				if (requestEncrypted) {
+				Long transformSessionId = null;
+				if (isTransformHeader(messageSegment)) {
+					transformSessionId = new TransformHeader(messageSegment.asSlice(0, TransformHeader.STRUCTURE_SIZE)).sessionId();
 					messageSegment = decryptTransform(messageSegment);
 				}
 
@@ -136,7 +138,7 @@ class TcpConnection implements Runnable {
 				if (SMB1MessageParser.isSmb1(messageSegment)) {
 					handleSmb1Packet(messageSegment);
 				} else if (SMB2MessageParser.isSmb2(messageSegment)) {
-					handleSmb2Packet(messageSegment, requestEncrypted);
+					handleSmb2Packet(messageSegment, transformSessionId);
 				} else {
 					throw new MalformedMessageException("Unknown protocol");
 				}
@@ -174,7 +176,9 @@ class TcpConnection implements Runnable {
 		writeWire(response.serialize());
 	}
 
-	private void handleSmb2Packet(MemorySegment segment, boolean requestEncrypted) throws MalformedMessageException {
+	// transformSessionId: the SessionId of the SMB2 TRANSFORM_HEADER the packet arrived in, or null if it arrived unencrypted
+	private void handleSmb2Packet(MemorySegment segment, @Nullable Long transformSessionId) throws MalformedMessageException {
+		boolean requestEncrypted = transformSessionId != null;
 		int offset = 0;
 		int nextCommand;
 		FileId chainedFileId = null;
@@ -183,7 +187,7 @@ class TcpConnection implements Runnable {
 			if (msg instanceof FileIdCarrying msgWithFile && chainedFileId != null && msg.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS)) {
 				msgWithFile.substituteFileIdIfSentinel(chainedFileId);
 			}
-			var rejection = requestVerifier.verify(msg, requestEncrypted);
+			var rejection = requestVerifier.verify(msg, transformSessionId);
 			SMB2Message response = rejection != null ? rejection : switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);

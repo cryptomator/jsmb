@@ -22,13 +22,16 @@ public class RequestVerifier {
 	/**
 	 * Verifies that the given request may be processed.
 	 *
-	 * @param request   the request about to be dispatched
-	 * @param encrypted whether the request arrived wrapped in an SMB2 TRANSFORM_HEADER
+	 * @param request            the request about to be dispatched
+	 * @param transformSessionId the SessionId of the SMB2 TRANSFORM_HEADER the request arrived in, or {@code null} if it arrived unencrypted
 	 * @return the error response to send instead of processing the request, or {@code null} if the request passed verification
 	 */
-	public @Nullable ErrorResponse verify(SMB2Message request, boolean encrypted) {
+	public @Nullable ErrorResponse verify(SMB2Message request, @Nullable Long transformSessionId) {
 		var command = request.header().command();
-		var session = connection.sessionTable.get(request.header().sessionId());
+		var sessionId = request.header().sessionId();
+		var session = connection.sessionTable.get(sessionId);
+		// A transform is decrypted with the keys of the session named in its header, so it only vouches for requests of that very session.
+		var encrypted = transformSessionId != null && transformSessionId == sessionId;
 
 		// Verifying the Signature
 		var signed = request.header().hasFlag(SMB2Message.Flags.SIGNED);
@@ -62,6 +65,13 @@ public class RequestVerifier {
 		// A session is registered as soon as the first SESSION_SETUP leg arrives, so its state is the only thing telling an authenticated client from one that merely started authenticating.
 		// The spec leaves the error code for InProgress implementation-specific. Session.State.EXPIRED is never assigned (no session expiry), hence no STATUS_NETWORK_SESSION_EXPIRED.
 		if (session.state != Session.State.VALID && !isAnyOf(command, Command.LOGOFF, Command.CLOSE, Command.LOCK)) {
+			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
+		}
+		// Not covered by the spec: a request wrapped in the transform of a different session. Its own session's keys never authenticated it.
+		if (transformSessionId != null && !encrypted) {
+			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
+		}
+		if (session.encryptData && !encrypted) {
 			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
 		return null;

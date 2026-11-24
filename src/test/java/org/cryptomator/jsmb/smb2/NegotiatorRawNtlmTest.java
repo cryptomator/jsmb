@@ -5,6 +5,7 @@ import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.smb2.negotiate.EncryptionCapabilities;
+import org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.PreauthIntegrityCapabilities;
 import org.cryptomator.jsmb.util.Layouts;
 import org.junit.jupiter.api.AfterEach;
@@ -45,14 +46,19 @@ class NegotiatorRawNtlmTest {
 	@BeforeEach
 	void setUp() throws IOException {
 		server = Server.start(0, Config.create(), new Credentials("DOMAIN", "user", "password"));
-		connection = new Connection(server.global);
+		connection = negotiatedConnection(server);
+		negotiator = new Negotiator(server, connection);
+	}
+
+	private static Connection negotiatedConnection(Server server) {
+		var connection = new Connection(server.global);
 		// Post-NEGOTIATE state — enough for the SESSION_SETUP branch that cares about preauth / cipher.
 		connection.dialect = "3.1.1";
 		connection.negotiateDialect = Dialects.SMB3_1_1;
 		connection.preauthIntegrityHashId = PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512;
 		connection.preauthIntegrityHashValue = new byte[64];
 		connection.cipherId = EncryptionCapabilities.AES_128_GCM;
-		negotiator = new Negotiator(server, connection);
+		return connection;
 	}
 
 	@AfterEach
@@ -109,6 +115,35 @@ class NegotiatorRawNtlmTest {
 		Assertions.assertEquals(NTStatus.STATUS_NOT_SUPPORTED, response.header().status());
 		Assertions.assertSame(session, connection.sessionTable.get(session.sessionId));
 		Assertions.assertEquals(Session.State.VALID, session.state);
+	}
+
+	@Test
+	@DisplayName("With REJECT_UNENCRYPTED_ACCESS, SESSION_SETUP is rejected with STATUS_ACCESS_DENIED if no cipher was negotiated")
+	void rejectUnencryptedAccessWithoutCipher() throws IOException {
+		try (var strictServer = Server.start(0, Config.create(Config.REJECT_UNENCRYPTED_ACCESS), new Credentials("DOMAIN", "user", "password"))) {
+			var strictConnection = negotiatedConnection(strictServer);
+			strictConnection.clientCapabilities = GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
+			strictConnection.cipherId = EncryptionCapabilities.NO_COMMON_CIPHER;
+			var request = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, 0L, 1L);
+
+			var response = new Negotiator(strictServer, strictConnection).sessionSetup(request);
+
+			Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, response.header().status());
+		}
+	}
+
+	@Test
+	@DisplayName("With REJECT_UNENCRYPTED_ACCESS, SESSION_SETUP proceeds if a cipher was negotiated")
+	void rejectUnencryptedAccessWithCipher() throws IOException {
+		try (var strictServer = Server.start(0, Config.create(Config.REJECT_UNENCRYPTED_ACCESS), new Credentials("DOMAIN", "user", "password"))) {
+			var strictConnection = negotiatedConnection(strictServer);
+			strictConnection.clientCapabilities = GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
+			var request = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, 0L, 1L);
+
+			var response = new Negotiator(strictServer, strictConnection).sessionSetup(request);
+
+			Assertions.assertEquals(NTStatus.STATUS_MORE_PROCESSING_REQUIRED, response.header().status());
+		}
 	}
 
 	private static byte[] extractSecurityBuffer(SessionSetupResponse response) {
