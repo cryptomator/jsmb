@@ -26,6 +26,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -61,38 +62,24 @@ public class IoctlIT {
 
 	@AfterAll
 	public void tearDown() throws IOException {
-		if (ipc != null) ipc.close();
-		if (connection != null) connection.close();
+		// the last test leaves a connection behind that the server has dropped, so there is no one to disconnect from in an orderly fashion
+		try {
+			if (connection != null) connection.close(true);
+		} catch (IOException e) {
+			// the transport is gone already
+		}
 		if (client != null) client.close();
 		if (server != null) server.close();
 	}
 
 	@Test
 	@Order(1)
-	@DisplayName("FSCTL_VALIDATE_NEGOTIATE_INFO is rejected with STATUS_FILE_CLOSED")
-	public void validateNegotiateInfoIsRejectedWithFileClosed() throws Exception {
-		var request = new SMB2IoctlRequest(SMB2Dialect.SMB_3_1_1,
-				session.getSessionId(),
-				treeId,
-				FSCTL_VALIDATE_NEGOTIATE_INFO,
-				FILE_ID_NONE,
-				new ArrayByteChunkProvider(new byte[0], 0), // no input — server rejects before parsing per MS-SMB2 3.3.5.15.12
-				true, // fsctl
-				64);
-
-		var response = session.<SMB2IoctlResponse>send(request).get(5, TimeUnit.SECONDS);
-
-		Assertions.assertEquals(NtStatus.STATUS_FILE_CLOSED.getValue(), response.getHeader().getStatusCode());
-	}
-
-	@Test
-	@Order(2)
 	@DisplayName("An IOCTL without tree connect is rejected with STATUS_NETWORK_NAME_DELETED")
 	public void ioctlWithoutTreeConnectIsRejected() throws Exception {
 		var request = new SMB2IoctlRequest(SMB2Dialect.SMB_3_1_1,
 				session.getSessionId(),
 				0L, // never handed out as TreeId
-				FSCTL_VALIDATE_NEGOTIATE_INFO,
+				FSCTL_UNRECOGNIZED,
 				FILE_ID_NONE,
 				new ArrayByteChunkProvider(new byte[0], 0),
 				true,
@@ -101,6 +88,41 @@ public class IoctlIT {
 		var response = session.<SMB2IoctlResponse>send(request).get(5, TimeUnit.SECONDS);
 
 		Assertions.assertEquals(NtStatus.STATUS_NETWORK_NAME_DELETED.getValue(), response.getHeader().getStatusCode());
+	}
+
+	@Test
+	@Order(2)
+	@DisplayName("An IOCTL that is not flagged as FSCTL is rejected with STATUS_NOT_SUPPORTED")
+	public void nonFsctlIsRejectedWithNotSupported() throws Exception {
+		var request = new SMB2IoctlRequest(SMB2Dialect.SMB_3_1_1,
+				session.getSessionId(),
+				treeId,
+				FSCTL_UNRECOGNIZED,
+				FILE_ID_NONE,
+				new ArrayByteChunkProvider(new byte[0], 0),
+				false, // not an FSCTL
+				64);
+
+		var response = session.<SMB2IoctlResponse>send(request).get(5, TimeUnit.SECONDS);
+
+		Assertions.assertEquals(NtStatus.STATUS_NOT_SUPPORTED.getValue(), response.getHeader().getStatusCode());
+	}
+
+	@Test
+	@Order(4) // last, as it costs the connection that the tests share
+	@DisplayName("FSCTL_VALIDATE_NEGOTIATE_INFO on dialect 3.1.1 drops the connection without a reply")
+	public void validateNegotiateInfoDropsConnection() throws Exception {
+		var request = new SMB2IoctlRequest(SMB2Dialect.SMB_3_1_1,
+				session.getSessionId(),
+				treeId,
+				FSCTL_VALIDATE_NEGOTIATE_INFO,
+				FILE_ID_NONE,
+				new ArrayByteChunkProvider(new byte[0], 0),
+				true, // fsctl
+				64);
+		var response = session.<SMB2IoctlResponse>send(request);
+
+		Assertions.assertThrows(ExecutionException.class, () -> response.get(5, TimeUnit.SECONDS));
 	}
 
 	@Test
