@@ -31,6 +31,11 @@ public record PreauthIntegrityCapabilities(MemorySegment data) implements Negoti
 		return NegotiateContext.PREAUTH_INTEGRITY_CAPABILITIES;
 	}
 
+	@Override
+	public boolean isWellFormed() {
+		return data.byteSize() >= 4 && data.byteSize() >= 4 + hashAlgorithmCount() * Character.BYTES + saltLength();
+	}
+
 	public char hashAlgorithmCount() {
 		return data.get(Layouts.LE_UINT16, 0);
 	}

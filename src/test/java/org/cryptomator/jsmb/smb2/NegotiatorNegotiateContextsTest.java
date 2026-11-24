@@ -4,6 +4,7 @@ import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.common.DisconnectException;
+import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.smb2.negotiate.CompressionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.EncryptionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.NegotiateContext;
@@ -17,6 +18,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -86,6 +89,77 @@ class NegotiatorNegotiateContextsTest {
 		// And the count on the wire must match.
 		Assertions.assertEquals(3, responseContextTypes.size(),
 				"expected exactly 3 contexts in the response (Preauth, Encryption, Signing); got " + responseContextTypes);
+	}
+
+	@Test
+	@DisplayName("A NEGOTIATE without preauth integrity context is failed with STATUS_INVALID_PARAMETER and leaves the connection un-negotiated")
+	void missingPreauthContext() {
+		var request = buildNegotiateRequest(List.of(EncryptionCapabilities.build(EncryptionCapabilities.AES_128_GCM)));
+
+		var response = negotiator.negotiate(request, 1);
+
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+		Assertions.assertEquals(Dialects.NONE, negotiator.connection().negotiateDialect);
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("A NEGOTIATE carrying a negotiate context twice is failed with STATUS_INVALID_PARAMETER")
+	@ValueSource(strings = {"preauth", "encryption", "signing"})
+	void duplicateContext(String duplicated) {
+		NegotiateContext preauth = PreauthIntegrityCapabilities.build(PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512, new byte[32]);
+		NegotiateContext duplicate = switch (duplicated) {
+			case "encryption" -> EncryptionCapabilities.build(EncryptionCapabilities.AES_128_GCM);
+			case "signing" -> SigningCapabilities.build(SigningCapabilities.Algorithm.AES_CMAC.getValue());
+			default -> preauth;
+		};
+		var request = buildNegotiateRequest(List.of(preauth, duplicate, duplicate));
+
+		var response = negotiator.negotiate(request, 1);
+
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+	}
+
+	@Test
+	@DisplayName("A signing capabilities context without algorithms is failed with STATUS_INVALID_PARAMETER")
+	void signingCapabilitiesWithoutAlgorithms() {
+		var request = buildNegotiateRequest(List.of(
+				PreauthIntegrityCapabilities.build(PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512, new byte[32]),
+				new SigningCapabilities(MemorySegment.ofArray(new byte[4])))); // SigningAlgorithmCount = 0
+
+		var response = negotiator.negotiate(request, 1);
+
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+	}
+
+	@Test
+	@DisplayName("The first supported hash algorithm gets selected, even if the client lists an unsupported one before it")
+	void selectsSupportedHashAlgorithm() {
+		var request = buildNegotiateRequest(List.of(preauthIntegrityCapabilities((char) 0x7777, PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512)));
+
+		var response = negotiator.negotiate(request, 1);
+
+		Assertions.assertInstanceOf(NegotiateResponse.class, response);
+		Assertions.assertEquals(PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512, negotiator.connection().preauthIntegrityHashId);
+	}
+
+	@Test
+	@DisplayName("A NEGOTIATE offering no supported hash algorithm is failed with STATUS_SMB_NO_PREAUTH_INTEGRITY_HASH_OVERLAP")
+	void noSupportedHashAlgorithm() {
+		var request = buildNegotiateRequest(List.of(preauthIntegrityCapabilities((char) 0x7777)));
+
+		var response = negotiator.negotiate(request, 1);
+
+		Assertions.assertEquals(NTStatus.STATUS_SMB_NO_PREAUTH_INTEGRITY_HASH_OVERLAP, response.header().status());
+	}
+
+	// a preauth integrity context listing the given hash algorithms and no salt
+	private static PreauthIntegrityCapabilities preauthIntegrityCapabilities(char... hashAlgorithms) {
+		var data = MemorySegment.ofArray(new byte[4 + hashAlgorithms.length * Character.BYTES]);
+		data.set(Layouts.LE_UINT16, 0, (char) hashAlgorithms.length);
+		for (int i = 0; i < hashAlgorithms.length; i++) {
+			data.set(Layouts.LE_UINT16, 4 + i * Character.BYTES, hashAlgorithms[i]);
+		}
+		return new PreauthIntegrityCapabilities(data);
 	}
 
 	@Test

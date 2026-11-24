@@ -34,6 +34,11 @@ public record EncryptionCapabilities(MemorySegment data) implements NegotiateCon
 		return NegotiateContext.ENCRYPTION_CAPABILITIES;
 	}
 
+	@Override
+	public boolean isWellFormed() {
+		return data.byteSize() >= 2 && data.byteSize() >= 2 + cipherCount() * Character.BYTES;
+	}
+
 	public char cipherCount() {
 		return data.get(Layouts.LE_UINT16, 0);
 	}

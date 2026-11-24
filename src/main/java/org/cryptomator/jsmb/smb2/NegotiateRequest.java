@@ -5,8 +5,8 @@ import org.cryptomator.jsmb.util.Layouts;
 import org.cryptomator.jsmb.util.UInt16;
 
 import java.lang.foreign.MemorySegment;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -62,23 +62,38 @@ public record NegotiateRequest(PacketHeader header, MemorySegment segment) imple
 		return UInt16.stream(dialects()).anyMatch(d -> d == dialect);
 	}
 
-	public Set<NegotiateContext> negotiateContexts() {
+	/**
+	 * @return the negotiate contexts of known types in the order they appear in, duplicates included; contexts of unknown types are left out
+	 */
+	public List<NegotiateContext> negotiateContexts() {
 		if (!supportsDialect(Dialects.SMB3_1_1)) {
-			return Set.of();
+			return List.of();
 		}
 
 		// NegotiateContextOffset is relative to the beginning of the SMB2 header. An offset outside of the message makes asSlice throw, which fails the request.
 		long contextsOffset = Integer.toUnsignedLong(negotiateContextOffset()) - PacketHeader.STRUCTURE_SIZE;
 		MemorySegment contextsSegment = segment.asSlice(contextsOffset);
-		Set<NegotiateContext> result = new HashSet<>();
+		List<NegotiateContext> result = new ArrayList<>();
 		for (int offset = 0, i = 0; i < negotiateContextCount(); i++) {
-			var ctx = NegotiateContext.parse(contextsSegment.asSlice(offset));
-			result.add(ctx);
-			var ctxSize = ctx.segmentSize();
+			var ctxSegment = contextsSegment.asSlice(offset);
+			var ctx = NegotiateContext.parse(ctxSegment);
+			if (ctx != null) {
+				result.add(ctx);
+			}
+			var ctxSize = 8 + ctxSegment.get(Layouts.LE_UINT16, 2); // header + DataLength
 			var paddingSize = (8 - ctxSize % 8) % 8;
 			offset += ctxSize + paddingSize;
 		}
 		return result;
+	}
+
+	/**
+	 * @param type a type of negotiate context
+	 * @param <T>  the type of negotiate context
+	 * @return all negotiate contexts of the given type
+	 */
+	public <T extends NegotiateContext> List<T> negotiateContexts(Class<T> type) {
+		return negotiateContexts().stream().filter(type::isInstance).map(type::cast).toList();
 	}
 
 	public <T extends NegotiateContext> T negotiateContext(Class<T> type) {

@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2.negotiate;
 
 import org.cryptomator.jsmb.util.Layouts;
 import org.cryptomator.jsmb.util.MemorySegments;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.foreign.MemorySegment;
 
@@ -19,7 +20,13 @@ public sealed interface NegotiateContext permits PreauthIntegrityCapabilities, E
 	char SIGNING_CAPABILITIES = 0x08;
 	char CONTEXTTYPE_RESERVED = 0x0100;
 
-	static NegotiateContext parse(MemorySegment segment) {
+	/**
+	 * Parses a negotiate context.
+	 *
+	 * @param segment a segment starting with the negotiate context
+	 * @return the negotiate context, or {@code null} if its type is not known, in which case it is to be ignored
+	 */
+	static @Nullable NegotiateContext parse(MemorySegment segment) {
 		var contextType = segment.get(Layouts.LE_UINT16, 0);
 		var dataLen = segment.get(Layouts.LE_UINT16, 2);
 		var data = segment.asSlice(8, dataLen);
@@ -32,8 +39,17 @@ public sealed interface NegotiateContext permits PreauthIntegrityCapabilities, E
 			case RDMA_TRANSFORM_CAPABILITIES -> new RDMATransformCapabilities(data);
 			case SIGNING_CAPABILITIES -> new SigningCapabilities(data);
 			case CONTEXTTYPE_RESERVED -> new ReservedCapabilities(data);
-			default -> throw new IllegalArgumentException("Unknown negotiate context type: 0x" + Integer.toHexString(contextType));
+			default -> null;
 		};
+	}
+
+	/**
+	 * Tells whether this negotiate context holds what its structure definition calls for.
+	 *
+	 * @return {@code false} if the data is too short for the structure or for the lists it announces
+	 */
+	default boolean isWellFormed() {
+		return true;
 	}
 
 	char contextType();

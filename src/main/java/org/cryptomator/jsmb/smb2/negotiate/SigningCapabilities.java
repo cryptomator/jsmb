@@ -37,6 +37,11 @@ public record SigningCapabilities(MemorySegment data) implements NegotiateContex
 		return NegotiateContext.SIGNING_CAPABILITIES;
 	}
 
+	@Override
+	public boolean isWellFormed() {
+		return data.byteSize() >= 2 && signingAlgorithmCount() > 0 && data.byteSize() >= 2 + signingAlgorithmCount() * Character.BYTES;
+	}
+
 	public char signingAlgorithmCount() {
 		return data.get(Layouts.LE_UINT16, 0);
 	}

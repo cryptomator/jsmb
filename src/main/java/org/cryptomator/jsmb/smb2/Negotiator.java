@@ -64,6 +64,21 @@ public record Negotiator(Server server, Connection connection) {
 		if (!request.supportsDialect(Dialects.SMB3_1_1)) {
 			return ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
 		}
+		// The NegotiateContextList gets validated before any connection state changes, so that a failed NEGOTIATE leaves the connection as it was.
+		var requestedContexts = request.negotiateContexts();
+		if (count(requestedContexts, PreauthIntegrityCapabilities.class) != 1
+				|| count(requestedContexts, EncryptionCapabilities.class) > 1
+				|| count(requestedContexts, CompressionCapabilities.class) > 1
+				|| count(requestedContexts, RDMATransformCapabilities.class) > 1
+				|| count(requestedContexts, SigningCapabilities.class) > 1
+				|| !requestedContexts.stream().allMatch(NegotiateContext::isWellFormed)) {
+			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
+		}
+		var preauth = request.negotiateContext(PreauthIntegrityCapabilities.class);
+		var preauthIntegrityHashId = UInt16.stream(preauth.hashAlgorithms()).filter(id -> HashAlgorithm.isSupported((char) id)).findFirst();
+		if (preauthIntegrityHashId.isEmpty()) {
+			return ErrorResponse.create(request, NTStatus.STATUS_SMB_NO_PREAUTH_INTEGRITY_HASH_OVERLAP);
+		}
 		connection.clientGuid = request.clientGuid();
 		connection.clientCapabilities = request.capabilities();
 		connection.clientDialects = request.dialects();
@@ -77,11 +92,7 @@ public record Negotiator(Server server, Connection connection) {
 		LOG.debug("Client supports SMB 3.1.1");
 
 		// SMB2_PREAUTH_INTEGRITY_CAPABILITIES
-		var preauth = request.negotiateContext(PreauthIntegrityCapabilities.class); // 3.1.1 MUST include this
-		connection.preauthIntegrityHashId = preauth.hashAlgorithms()[0];
-		if (!HashAlgorithm.isSupported(connection.preauthIntegrityHashId)) {
-			return ErrorResponse.create(request, NTStatus.STATUS_SMB_NO_PREAUTH_INTEGRITY_HASH_OVERLAP);
-		}
+		connection.preauthIntegrityHashId = (char) preauthIntegrityHashId.getAsInt();
 		var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
 		connection.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(connection.preauthIntegrityHashValue, request.serialize()));
 
@@ -216,6 +227,10 @@ public record Negotiator(Server server, Connection connection) {
 		}
 
 		return response;
+	}
+
+	private static long count(List<NegotiateContext> contexts, Class<? extends NegotiateContext> type) {
+		return contexts.stream().filter(type::isInstance).count();
 	}
 
 	/**

@@ -4,6 +4,7 @@ import org.cryptomator.jsmb.smb2.negotiate.PreauthIntegrityCapabilities;
 import org.cryptomator.jsmb.util.Layouts;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -32,5 +33,28 @@ class NegotiateRequestTest {
 		var preauthIntegrityCapabilities = request.negotiateContext(PreauthIntegrityCapabilities.class);
 
 		Assertions.assertNotNull(preauthIntegrityCapabilities);
+	}
+
+	@Test
+	@DisplayName("A negotiate context of an unknown type is skipped, and those following it are still found")
+	void unknownNegotiateContext() {
+		var known = PreauthIntegrityCapabilities.build(PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512, new byte[32]).segment();
+		int contextsStart = 40; // 36 + one dialect, aligned to 8 bytes
+		int knownStart = contextsStart + 16; // the unknown context takes an 8-byte header and 5 bytes of data, padded to 16
+		var body = MemorySegment.ofArray(new byte[(int) (knownStart + known.byteSize())]);
+		body.set(Layouts.LE_UINT16, 0, (char) 36); // StructureSize
+		body.set(Layouts.LE_UINT16, 2, (char) 1); // DialectCount
+		body.set(Layouts.LE_INT32, 28, PacketHeader.STRUCTURE_SIZE + contextsStart); // NegotiateContextOffset
+		body.set(Layouts.LE_UINT16, 32, (char) 2); // NegotiateContextCount
+		body.set(Layouts.LE_UINT16, 36, Dialects.SMB3_1_1);
+		body.set(Layouts.LE_UINT16, contextsStart, (char) 0x7777); // ContextType
+		body.set(Layouts.LE_UINT16, contextsStart + 2, (char) 5); // DataLength
+		MemorySegment.copy(known, 0, body, knownStart, known.byteSize());
+		var request = new NegotiateRequest(PacketHeader.builder().command(Command.NEGOTIATE.value()).build(), body);
+
+		var contexts = request.negotiateContexts();
+
+		Assertions.assertEquals(1, contexts.size());
+		Assertions.assertInstanceOf(PreauthIntegrityCapabilities.class, contexts.getFirst());
 	}
 }
