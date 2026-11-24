@@ -21,8 +21,10 @@ import java.lang.foreign.MemorySegment;
 
 public class SMB2MessageParser {
 
+	private static final int MIN_MESSAGE_SIZE = PacketHeader.STRUCTURE_SIZE + 2; // 64 header + 2 structure size
+
 	public static boolean isSmb2(MemorySegment segment) {
-		if (segment.byteSize() < 66) { // 64 header + 2 structure size
+		if (segment.byteSize() < MIN_MESSAGE_SIZE) {
 			return false;
 		} else {
 			int protocolId = segment.get(Layouts.LE_INT32, 0);
@@ -35,8 +37,16 @@ public class SMB2MessageParser {
 			throw new MalformedMessageException("Not a SMB2 message");
 		}
 		var headerSegment = segment.asSlice(0, PacketHeader.STRUCTURE_SIZE);
-		var bodySegment = segment.asSlice(PacketHeader.STRUCTURE_SIZE);
 		var header = new PacketHeader(headerSegment);
+		// In a compound chain the message (including its padding) ends where the next one starts. This is also the range covered by its signature.
+		int nextCommand = header.nextCommand();
+		if (nextCommand != 0) {
+			if (nextCommand < MIN_MESSAGE_SIZE || nextCommand > segment.byteSize()) {
+				throw new MalformedMessageException("Invalid NextCommand: " + nextCommand);
+			}
+			segment = segment.asSlice(0, nextCommand);
+		}
+		var bodySegment = segment.asSlice(PacketHeader.STRUCTURE_SIZE);
 		try {
 			return switch (Command.valueOf(header.command())) {
 				case NEGOTIATE -> new NegotiateRequest(header, bodySegment);

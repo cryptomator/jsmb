@@ -7,11 +7,13 @@ import org.cryptomator.jsmb.smb2.PacketHeaderBuilder;
 import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.smb2.SessionSetupResponse;
 import org.cryptomator.jsmb.smb2.negotiate.SigningCapabilities;
+import org.cryptomator.jsmb.util.Bytes;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -100,6 +102,89 @@ class MessageSignerTest {
 		var signedMsg = new SignedMessage(signer.sign(unsignedMsg, HEX_FORMAT.parseHex(signingKeyHex), signingAlg), unsignedMsg.segment());
 		var expSignedMsg = HEX_FORMAT.parseHex(expSignedMsgHex);
 		assertBytesEquals(signedMsg.serialize(), expSignedMsg);
+	}
+
+	private static final byte[] KEY = HEX_FORMAT.parseHex("23A69FFF57BCB19502BB74E79CE760DB");
+
+	@Test
+	@DisplayName("verify() accepts a request carrying a correct AES-CMAC signature")
+	public void testVerifyCmac() {
+		var signer = new MessageSigner();
+		var request = clientSignedRequest(signer, SigningCapabilities.Algorithm.AES_CMAC);
+
+		var valid = signer.verify(request, KEY, SigningCapabilities.Algorithm.AES_CMAC);
+
+		Assertions.assertTrue(valid);
+	}
+
+	@Test
+	@DisplayName("verify() accepts a request carrying a correct AES-GMAC signature")
+	public void testVerifyGmac() {
+		var signer = new MessageSigner();
+		var request = clientSignedRequest(signer, SigningCapabilities.Algorithm.AES_GMAC);
+
+		var valid = signer.verify(request, KEY, SigningCapabilities.Algorithm.AES_GMAC);
+
+		Assertions.assertTrue(valid);
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("verify() rejects a request whose body got modified after signing")
+	@EnumSource(value = SigningCapabilities.Algorithm.class, names = {"AES_CMAC", "AES_GMAC"})
+	public void testVerifyTamperedBody(SigningCapabilities.Algorithm algorithm) {
+		var signer = new MessageSigner();
+		var request = clientSignedRequest(signer, algorithm);
+		request.segment().set(ValueLayout.JAVA_BYTE, 2, (byte) 0x01);
+
+		var valid = signer.verify(request, KEY, algorithm);
+
+		Assertions.assertFalse(valid);
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("verify() rejects a request signed with a different key")
+	@EnumSource(value = SigningCapabilities.Algorithm.class, names = {"AES_CMAC", "AES_GMAC"})
+	public void testVerifyWrongKey(SigningCapabilities.Algorithm algorithm) {
+		var signer = new MessageSigner();
+		var request = clientSignedRequest(signer, algorithm);
+		var otherKey = HEX_FORMAT.parseHex("E07AA62CC914810061E07EE1084FCE1B");
+
+		var valid = signer.verify(request, otherKey, algorithm);
+
+		Assertions.assertFalse(valid);
+	}
+
+	@Test
+	@DisplayName("verify() rejects an AES-GMAC signature computed with the server's nonce, i.e. a reflected response")
+	public void testVerifyGmacServerNonce() {
+		var signer = new MessageSigner();
+		var unsigned = new SignedMessage(requestHeader().build(), MemorySegment.ofArray(new byte[4]));
+		var reflected = new SignedMessage(signer.sign(unsigned, KEY, SigningCapabilities.Algorithm.AES_GMAC), unsigned.segment());
+
+		var valid = signer.verify(reflected, KEY, SigningCapabilities.Algorithm.AES_GMAC);
+
+		Assertions.assertFalse(valid);
+	}
+
+	private static PacketHeaderBuilder requestHeader() {
+		return new PacketHeaderBuilder() //
+				.command(Command.ECHO.value()) //
+				.flags(SMB2Message.Flags.SIGNED) //
+				.messageId(0x0123456789ABCDEFL) //
+				.sessionId(0x42L);
+	}
+
+	// signs an ECHO request the way a client does, independently of MessageSigner#verify: over header (zeroed signature) + body, GMAC nonce = MessageId followed by four zero bytes
+	private static SignedMessage clientSignedRequest(MessageSigner signer, SigningCapabilities.Algorithm algorithm) {
+		var header = requestHeader();
+		var body = MemorySegment.ofArray(new byte[]{4, 0, 0, 0});
+		var data = Bytes.concat(header.segment().toArray(ValueLayout.JAVA_BYTE), body.toArray(ValueLayout.JAVA_BYTE));
+		byte[] signature = switch (algorithm) {
+			case AES_CMAC -> signer.cmac(data, KEY);
+			case AES_GMAC -> signer.gmac(data, HEX_FORMAT.parseHex("efcdab896745230100000000"), KEY);
+			default -> throw new IllegalArgumentException("Unsupported algorithm: " + algorithm);
+		};
+		return new SignedMessage(header.signature(signature).build(), body);
 	}
 
 	record SignedMessage(PacketHeader header, MemorySegment segment) implements SMB2Message {

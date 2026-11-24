@@ -335,6 +335,10 @@ public record Negotiator(Server server, Connection connection) {
 					session.encryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBS2CCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
 					session.decryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBC2SCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
 					session.encryptData = connection.global.encryptData && connection.cipherId != EncryptionCapabilities.NO_COMMON_CIPHER; // step 10
+					// step 5 (there are neither guest nor anonymous sessions) and step 10 (encrypted sessions don't sign).
+					// Deliberately not applied: step 10's "Otherwise, set Session.SigningRequired to TRUE", which would lock out every client that only signs when asked to, no matter how the server is configured.
+					boolean signingRequested = (request.securityMode() & SecurityMode.SIGNING_REQUIRED) != 0 || connection.shouldSign || connection.global.requireMessageSigning;
+					session.signingRequired = signingRequested && !session.encryptData;
 					session.state = Session.State.VALID; // step 14
 					if (connection.global.debugEncryption) {
 						logSessionKeys(session);

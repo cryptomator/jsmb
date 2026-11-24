@@ -55,7 +55,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.net.Socket;
-import java.util.Arrays;
 import java.util.Objects;
 
 import static org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
@@ -184,7 +183,7 @@ class TcpConnection implements Runnable {
 			if (msg instanceof FileIdCarrying msgWithFile && chainedFileId != null && msg.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS)) {
 				msgWithFile.substituteFileIdIfSentinel(chainedFileId);
 			}
-			var rejection = requestVerifier.verify(msg);
+			var rejection = requestVerifier.verify(msg, requestEncrypted);
 			SMB2Message response = rejection != null ? rejection : switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
@@ -214,6 +213,10 @@ class TcpConnection implements Runnable {
 				}
 				default -> throw new MalformedMessageException("Unexpected SMB2 message type: " + msg.getClass().getSimpleName());
 			};
+			if (rejection != null && msg instanceof CancelRequest) {
+				// CANCEL is one-way, so not even its rejection is answered. An error carrying the MessageId of the request to be cancelled would be mistaken for that request's response.
+				response = null;
+			}
 			// Advance the chain cursor before the null-response guard so `continue` still makes progress.
 			nextCommand = msg.header().nextCommand();
 			offset += nextCommand;
@@ -288,11 +291,10 @@ class TcpConnection implements Runnable {
 	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d594481c-f6d5-4de5-8842-9099063d41e7">Signing the Message</a>
 	 */
 	private boolean shouldSign(SMB2Message request, SMB2Message response, Session session) {
-		var signed = !Arrays.equals(request.header().signature(), new byte[16]);
+		var signed = request.header().hasFlag(SMB2Message.Flags.SIGNED);
 		var sessionId = response.header().sessionId();
 		var treeId = response.header().treeId();
 
-		assert signed == request.header().hasFlag(SMB2Message.Flags.SIGNED);
 		if (signed && sessionId != 0 && treeId == 0 && session.signingRequired) {
 			return true;
 		}

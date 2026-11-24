@@ -6,11 +6,13 @@ import org.cryptomator.jsmb.common.NTStatus;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.foreign.MemorySegment;
+import java.util.HexFormat;
 
 class RequestVerifierTest {
 
@@ -30,7 +32,7 @@ class RequestVerifierTest {
 	void sessionlessCommands(Command command) {
 		var request = request(command, 0L);
 
-		var rejection = verifier.verify(request);
+		var rejection = verifier.verify(request, false);
 
 		Assertions.assertNull(rejection);
 	}
@@ -40,7 +42,7 @@ class RequestVerifierTest {
 	void unknownSession() {
 		var request = request(Command.TREE_CONNECT, 0x1234L);
 
-		var rejection = verifier.verify(request);
+		var rejection = verifier.verify(request, false);
 
 		Assertions.assertNotNull(rejection);
 		Assertions.assertEquals(NTStatus.STATUS_USER_SESSION_DELETED, rejection.header().status());
@@ -53,7 +55,7 @@ class RequestVerifierTest {
 		var session = Session.create(connection);
 		var request = request(command, session.sessionId);
 
-		var rejection = verifier.verify(request);
+		var rejection = verifier.verify(request, false);
 
 		Assertions.assertNotNull(rejection);
 		Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, rejection.header().status());
@@ -67,7 +69,7 @@ class RequestVerifierTest {
 		var session = Session.create(connection);
 		var request = request(command, session.sessionId);
 
-		var rejection = verifier.verify(request);
+		var rejection = verifier.verify(request, false);
 
 		Assertions.assertNull(rejection);
 	}
@@ -80,13 +82,134 @@ class RequestVerifierTest {
 		session.state = Session.State.VALID;
 		var request = request(command, session.sessionId);
 
-		var rejection = verifier.verify(request);
+		var rejection = verifier.verify(request, false);
 
 		Assertions.assertNull(rejection);
 	}
 
+	@Nested
+	@DisplayName("Signature verification")
+	class Signature {
+
+		private static final byte[] KEY = HexFormat.of().parseHex("23a69fff57bcb19502bb74e79ce760db");
+		private static final byte[] OTHER_KEY = HexFormat.of().parseHex("e07aa62cc914810061e07ee1084fce1b");
+
+		private Session session;
+
+		@BeforeEach
+		void setUp() {
+			connection.dialect = "3.1.1"; // AES-CMAC, as no signing algorithm got negotiated
+			session = Session.create(connection);
+			session.state = Session.State.VALID;
+			session.signingKey = KEY;
+		}
+
+		@Test
+		@DisplayName("A correctly signed request passes")
+		void validSignature() {
+			var request = request(Command.TREE_CONNECT, session.sessionId).sign(KEY, connection);
+
+			var rejection = verifier.verify(request, false);
+
+			Assertions.assertNull(rejection);
+		}
+
+		@Test
+		@DisplayName("A request with a wrong signature is rejected with STATUS_ACCESS_DENIED")
+		void invalidSignature() {
+			var request = request(Command.TREE_CONNECT, session.sessionId).sign(OTHER_KEY, connection);
+
+			var rejection = verifier.verify(request, false);
+
+			Assertions.assertNotNull(rejection);
+			Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, rejection.header().status());
+		}
+
+		@Test
+		@DisplayName("A signed NEGOTIATE is rejected with STATUS_INVALID_PARAMETER")
+		void signedNegotiate() {
+			var request = request(Command.NEGOTIATE, 0L, SMB2Message.Flags.SIGNED);
+
+			var rejection = verifier.verify(request, false);
+
+			Assertions.assertNotNull(rejection);
+			Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, rejection.header().status());
+		}
+
+		@Test
+		@DisplayName("A signed request for an unknown SessionId is rejected with STATUS_USER_SESSION_DELETED, even if the command isn't bound to a session")
+		void signedRequestForUnknownSession() {
+			var request = request(Command.ECHO, 0x1234L, SMB2Message.Flags.SIGNED);
+
+			var rejection = verifier.verify(request, false);
+
+			Assertions.assertNotNull(rejection);
+			Assertions.assertEquals(NTStatus.STATUS_USER_SESSION_DELETED, rejection.header().status());
+		}
+
+		@Test
+		@DisplayName("A signed request on a session without signing key is rejected with STATUS_NOT_SUPPORTED")
+		void signedRequestWithoutSigningKey() {
+			session.signingKey = null;
+			var request = request(Command.TREE_CONNECT, session.sessionId, SMB2Message.Flags.SIGNED);
+
+			var rejection = verifier.verify(request, false);
+
+			Assertions.assertNotNull(rejection);
+			Assertions.assertEquals(NTStatus.STATUS_NOT_SUPPORTED, rejection.header().status());
+		}
+
+		@Test
+		@DisplayName("An unsigned request is rejected with STATUS_ACCESS_DENIED if the session requires signing")
+		void unsignedRequestOnSigningRequiredSession() {
+			session.signingRequired = true;
+			var request = request(Command.TREE_CONNECT, session.sessionId);
+
+			var rejection = verifier.verify(request, false);
+
+			Assertions.assertNotNull(rejection);
+			Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, rejection.header().status());
+		}
+
+		@Test
+		@DisplayName("An unsigned request passes if the session doesn't require signing")
+		void unsignedRequestOnSigningOptionalSession() {
+			session.signingRequired = false;
+			var request = request(Command.TREE_CONNECT, session.sessionId);
+
+			var rejection = verifier.verify(request, false);
+
+			Assertions.assertNull(rejection);
+		}
+
+		@Test
+		@DisplayName("An unsigned request that arrived encrypted passes even if the session requires signing")
+		void unsignedEncryptedRequestOnSigningRequiredSession() {
+			session.signingRequired = true;
+			var request = request(Command.TREE_CONNECT, session.sessionId);
+
+			var rejection = verifier.verify(request, true);
+
+			Assertions.assertNull(rejection);
+		}
+
+		@Test
+		@DisplayName("The signature of a request that arrived encrypted is not verified")
+		void signatureOfEncryptedRequestIsIgnored() {
+			var request = request(Command.TREE_CONNECT, session.sessionId).sign(OTHER_KEY, connection);
+
+			var rejection = verifier.verify(request, true);
+
+			Assertions.assertNull(rejection);
+		}
+	}
+
 	private static SMB2Message request(Command command, long sessionId) {
-		var header = PacketHeader.builder().command(command.value()).sessionId(sessionId).build();
+		return request(command, sessionId, 0);
+	}
+
+	private static SMB2Message request(Command command, long sessionId, int flags) {
+		var header = PacketHeader.builder().command(command.value()).sessionId(sessionId).flags(flags).build();
 		return new UnhandledRequest(header, MemorySegment.ofArray(new byte[0]));
 	}
 }
