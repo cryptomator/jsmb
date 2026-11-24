@@ -100,6 +100,30 @@ public class ConnectionStateIT {
 		}
 	}
 
+	@Test
+	@Order(5)
+	@DisplayName("A NEGOTIATE whose negotiate contexts lie outside of the message is failed with STATUS_INVALID_PARAMETER")
+	public void negotiateContextsOutsideMessage() throws IOException {
+		try (var socket = new Socket("localhost", server.getLocalPort())) {
+			socket.setSoTimeout(5000);
+			var in = new DataInputStream(socket.getInputStream());
+			var header = PacketHeader.builder().command(Command.NEGOTIATE.value()).messageId(0L).build();
+			var message = MemorySegment.ofArray(new byte[PacketHeader.STRUCTURE_SIZE + 40]);
+			MemorySegment.copy(header.segment(), 0, message, 0, PacketHeader.STRUCTURE_SIZE);
+			var body = message.asSlice(PacketHeader.STRUCTURE_SIZE);
+			body.set(Layouts.LE_UINT16, 0, (char) 36); // StructureSize
+			body.set(Layouts.LE_UINT16, 2, (char) 1); // DialectCount
+			body.set(Layouts.LE_INT32, 28, 0x1000); // NegotiateContextOffset, far beyond the end of the message
+			body.set(Layouts.LE_UINT16, 32, (char) 1); // NegotiateContextCount
+			body.set(Layouts.LE_UINT16, 36, (char) 0x0311); // the dialect that makes the server look for negotiate contexts
+			send(socket, message.toArray(Layouts.BYTE));
+
+			var errorResponse = new PacketHeader(MemorySegment.ofArray(in.readNBytes(in.readInt())).asSlice(0, PacketHeader.STRUCTURE_SIZE));
+
+			Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, errorResponse.status());
+		}
+	}
+
 	// a NEGOTIATE request offering no dialect, which the server fails with STATUS_INVALID_PARAMETER while leaving the connection un-negotiated
 	private static byte[] negotiateWithoutDialects(long messageId) {
 		var header = PacketHeader.builder().command(Command.NEGOTIATE.value()).messageId(messageId).build();

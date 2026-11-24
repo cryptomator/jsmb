@@ -16,6 +16,11 @@ import java.lang.foreign.MemorySegment;
  */
 public record QueryInfoRequest(PacketHeader header, MemorySegment segment) implements SMB2Message, FileIdCarrying {
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 41) && SMB2Message.containsBuffer(segment, inputBufferOffset(), Integer.toUnsignedLong(inputBufferLength()));
+	}
+
 	/** {@code SMB2_0_INFO_FILE} — the request is for file-level info (MS-FSCC 2.4). */
 	public static final byte INFO_TYPE_FILE = 0x01;
 	/** {@code SMB2_0_INFO_FILESYSTEM} — the request is for filesystem-level info (MS-FSCC 2.5). */

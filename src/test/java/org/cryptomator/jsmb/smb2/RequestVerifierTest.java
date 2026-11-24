@@ -91,6 +91,18 @@ class RequestVerifierTest {
 		Assertions.assertTrue(rejection.isEmpty());
 	}
 
+	@Test
+	@DisplayName("A malformed request is rejected with STATUS_INVALID_PARAMETER")
+	void malformedRequest() {
+		var session = sessionWithTree();
+		var header = PacketHeader.builder().command(Command.READ.value()).sessionId(session.sessionId).treeId(TREE_ID).build();
+		var request = new ReadRequest(header, MemorySegment.ofArray(new byte[10])); // far too short for a READ request
+
+		var rejection = verify(request, null);
+
+		Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_INVALID_PARAMETER), rejection);
+	}
+
 	@Nested
 	@DisplayName("Credit charge verification")
 	class CreditCharge {
@@ -139,6 +151,7 @@ class RequestVerifierTest {
 		private ReadRequest readRequest(int length, int creditCharge) {
 			var header = PacketHeader.builder().command(Command.READ.value()).creditCharge((char) creditCharge).sessionId(session.sessionId).treeId(TREE_ID).build();
 			var body = MemorySegment.ofArray(new byte[49]);
+			body.set(Layouts.LE_UINT16, 0, (char) 49); // StructureSize
 			body.set(Layouts.LE_INT32, 4, length); // Length
 			return new ReadRequest(header, body);
 		}

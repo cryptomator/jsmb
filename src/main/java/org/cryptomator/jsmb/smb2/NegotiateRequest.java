@@ -16,6 +16,14 @@ import java.util.UUID;
  */
 public record NegotiateRequest(PacketHeader header, MemorySegment segment) implements SMB2Message {
 
+	private static final int DIALECTS_OFFSET = 36; // within the body
+
+	@Override
+	public boolean isWellFormed() {
+		// The negotiate contexts are not looked at here. Whether they exist depends on the dialects, and failing to parse them fails the request just the same.
+		return SMB2Message.hasStructure(segment, 36) && DIALECTS_OFFSET + dialectCount() * Character.BYTES <= segment.byteSize();
+	}
+
 	public char structureSize() {
 		return segment.get(Layouts.LE_UINT16, 0); // should always be 36, regardless of dialects and negotiate contexts
 	}
@@ -47,7 +55,7 @@ public record NegotiateRequest(PacketHeader header, MemorySegment segment) imple
 	}
 
 	public char[] dialects() {
-		return segment.asSlice(36, dialectCount() * Character.BYTES).toArray(Layouts.LE_UINT16);
+		return segment.asSlice(DIALECTS_OFFSET, dialectCount() * Character.BYTES).toArray(Layouts.LE_UINT16);
 	}
 
 	public boolean supportsDialect(char dialect) {
@@ -59,11 +67,9 @@ public record NegotiateRequest(PacketHeader header, MemorySegment segment) imple
 			return Set.of();
 		}
 
-		// start of negotiate context is 8-byte-aligned
-		int endOfDialects = 36 + dialectCount() * Character.BYTES;
-		int padding = 8 - endOfDialects % 8;
-
-		MemorySegment contextsSegment = segment.asSlice(endOfDialects + padding);
+		// NegotiateContextOffset is relative to the beginning of the SMB2 header. An offset outside of the message makes asSlice throw, which fails the request.
+		long contextsOffset = Integer.toUnsignedLong(negotiateContextOffset()) - PacketHeader.STRUCTURE_SIZE;
+		MemorySegment contextsSegment = segment.asSlice(contextsOffset);
 		Set<NegotiateContext> result = new HashSet<>();
 		for (int offset = 0, i = 0; i < negotiateContextCount(); i++) {
 			var ctx = NegotiateContext.parse(contextsSegment.asSlice(offset));

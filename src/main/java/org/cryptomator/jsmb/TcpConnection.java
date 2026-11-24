@@ -232,41 +232,25 @@ class TcpConnection implements Runnable {
 				if (treeId != null) {
 					msg.header().treeId(treeId);
 				}
-				if (msg instanceof FileIdCarrying msgWithFile && chainedFileId != null) {
+				if (rejection.isEmpty() && msg instanceof FileIdCarrying msgWithFile && chainedFileId != null) { // the body of a rejected request may be too short to hold a FileId
 					msgWithFile.substituteFileIdIfSentinel(chainedFileId);
 				}
 			}
 			// looked up before dispatching, as a LOGOFF response still has to be signed or encrypted with the keys of the session it just removed
 			var sessionBefore = sessionId == null ? null : connection.sessionTable.get(sessionId);
-			SMB2Message response = rejection.isPresent() ? reject(msg, rejection.getAsInt()) : switch (msg) {
-				case NegotiateRequest request -> negotiator.negotiate(request, grantedCredits);
-				case SessionSetupRequest request -> negotiator.sessionSetup(request, grantedCredits);
-				case LogoffRequest request -> runtime.logoff(request);
-				case IoctlRequest request -> ioctlHandler.handle(request);
-				case TreeConnectRequest request -> treeConnectHandler.connect(request);
-				case TreeDisconnectRequest request -> treeConnectHandler.disconnect(request);
-				case CreateRequest request -> createHandler.create(request);
-				case CloseRequest request -> createHandler.close(request);
-				case QueryDirectoryRequest request -> queryDirectoryHandler.query(request);
-				case QueryInfoRequest request -> queryInfoHandler.query(request);
-				case SetInfoRequest request -> setInfoHandler.set(request);
-				case ReadRequest request -> readHandler.read(request);
-				case WriteRequest request -> writeHandler.write(request);
-				case FlushRequest request -> writeHandler.flush(request);
-				case EchoRequest request -> runtime.echo(request);
-				case ChangeNotifyRequest request -> runtime.changeNotify(request);
-				case CancelRequest request -> {
-					// CANCEL is one-way — no response is emitted for the CANCEL itself. jSMB has no async
-					// requests in flight, so there is nothing to interrupt; log and drop.
-					LOG.debug("CANCEL messageId={} (no async in flight)", request.header().messageId());
-					yield null;
+			SMB2Message response;
+			if (rejection.isPresent()) {
+				response = reject(msg, rejection.getAsInt());
+			} else {
+				try {
+					response = dispatch(msg, grantedCredits);
+				} catch (IndexOutOfBoundsException e) {
+					// A safety net for what RequestVerifier doesn't look into, such as nested structures: reading beyond the end of a message means that the request is malformed.
+					// See https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/853e5234-d5d6-4a18-a2f5-1c792e562947
+					LOG.warn("Malformed request (command 0x{})", Integer.toHexString(msg.header().command()), e);
+					response = reject(msg, NTStatus.STATUS_INVALID_PARAMETER);
 				}
-				case UnhandledRequest request -> {
-					LOG.debug("Command 0x{} not implemented, replying STATUS_NOT_SUPPORTED", Integer.toHexString(request.header().command()));
-					yield ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
-				}
-				default -> throw new MalformedMessageException("Unexpected SMB2 message type: " + msg.getClass().getSimpleName());
-			};
+			}
 			chain.processed(msg, response);
 			// Advance the chain cursor before the null-response guard so `continue` still makes progress.
 			nextCommand = msg.header().nextCommand();
@@ -293,6 +277,39 @@ class TcpConnection implements Runnable {
 			return sessionBefore;
 		}
 		return session;
+	}
+
+	// grantedCredits: see Negotiator for why its responses need to know them
+	private @Nullable SMB2Message dispatch(SMB2Message msg, int grantedCredits) {
+		return switch (msg) {
+			case NegotiateRequest request -> negotiator.negotiate(request, grantedCredits);
+			case SessionSetupRequest request -> negotiator.sessionSetup(request, grantedCredits);
+			case LogoffRequest request -> runtime.logoff(request);
+			case IoctlRequest request -> ioctlHandler.handle(request);
+			case TreeConnectRequest request -> treeConnectHandler.connect(request);
+			case TreeDisconnectRequest request -> treeConnectHandler.disconnect(request);
+			case CreateRequest request -> createHandler.create(request);
+			case CloseRequest request -> createHandler.close(request);
+			case QueryDirectoryRequest request -> queryDirectoryHandler.query(request);
+			case QueryInfoRequest request -> queryInfoHandler.query(request);
+			case SetInfoRequest request -> setInfoHandler.set(request);
+			case ReadRequest request -> readHandler.read(request);
+			case WriteRequest request -> writeHandler.write(request);
+			case FlushRequest request -> writeHandler.flush(request);
+			case EchoRequest request -> runtime.echo(request);
+			case ChangeNotifyRequest request -> runtime.changeNotify(request);
+			case CancelRequest request -> {
+				// CANCEL is one-way — no response is emitted for the CANCEL itself. jSMB has no async
+				// requests in flight, so there is nothing to interrupt; log and drop.
+				LOG.debug("CANCEL messageId={} (no async in flight)", request.header().messageId());
+				yield null;
+			}
+			case UnhandledRequest request -> {
+				LOG.debug("Command 0x{} not implemented, replying STATUS_NOT_SUPPORTED", Integer.toHexString(request.header().command()));
+				yield ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
+			}
+			default -> throw new MalformedMessageException("Unexpected SMB2 message type: " + msg.getClass().getSimpleName());
+		};
 	}
 
 	private static @Nullable SMB2Message reject(SMB2Message request, int status) {

@@ -17,6 +17,13 @@ import java.util.List;
  */
 public record CreateRequest(PacketHeader header, MemorySegment segment) implements SMB2Message {
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 57) //
+				&& SMB2Message.containsBuffer(segment, nameOffset(), nameLength()) //
+				&& SMB2Message.containsBuffer(segment, Integer.toUnsignedLong(createContextsOffset()), Integer.toUnsignedLong(createContextsLength()));
+	}
+
 	public char structureSize() {
 		return segment.get(Layouts.LE_UINT16, 0);
 	}

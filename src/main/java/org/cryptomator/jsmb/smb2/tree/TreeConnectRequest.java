@@ -15,6 +15,11 @@ import java.nio.charset.StandardCharsets;
  */
 public record TreeConnectRequest(PacketHeader header, MemorySegment segment) implements SMB2Message {
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 9) && SMB2Message.containsBuffer(segment, pathOffset(), pathLength());
+	}
+
 	public char structureSize() {
 		return segment.get(Layouts.LE_UINT16, 0);
 	}

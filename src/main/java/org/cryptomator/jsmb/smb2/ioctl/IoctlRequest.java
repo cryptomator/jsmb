@@ -18,6 +18,11 @@ public record IoctlRequest(PacketHeader header, MemorySegment segment) implement
 	/** When set in {@link #flags()}, {@link #ctlCode()} names an FSCTL (MS-FSCC §2.3) rather than a device IOCTL. */
 	public static final int FLAG_IS_FSCTL = 0x00000001;
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 57) && SMB2Message.containsBuffer(segment, Integer.toUnsignedLong(inputOffset()), Integer.toUnsignedLong(inputCount()));
+	}
+
 	public char structureSize() {
 		return segment.get(Layouts.LE_UINT16, 0);
 	}

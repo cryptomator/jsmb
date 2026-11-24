@@ -17,6 +17,11 @@ import java.lang.foreign.MemorySegment;
  */
 public record WriteRequest(PacketHeader header, MemorySegment segment) implements SMB2Message, FileIdCarrying {
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 49) && SMB2Message.containsBuffer(segment, dataOffset(), Integer.toUnsignedLong(length()));
+	}
+
 	public char structureSize() {
 		return segment.get(Layouts.LE_UINT16, 0);
 	}

@@ -17,6 +17,11 @@ import java.nio.charset.StandardCharsets;
  */
 public record QueryDirectoryRequest(PacketHeader header, MemorySegment segment) implements SMB2Message, FileIdCarrying {
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 33) && SMB2Message.containsBuffer(segment, fileNameOffset(), fileNameLength());
+	}
+
 	/** Reset the directory enumeration to the start. */
 	public static final byte FLAG_RESTART_SCAN = 0x01;
 	/** Return at most one entry and stop. */

@@ -16,6 +16,11 @@ import java.lang.foreign.MemorySegment;
  */
 public record ChangeNotifyRequest(PacketHeader header, MemorySegment segment) implements SMB2Message, FileIdCarrying {
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 32);
+	}
+
 	public char structureSize() {
 		return segment.get(Layouts.LE_UINT16, 0);
 	}

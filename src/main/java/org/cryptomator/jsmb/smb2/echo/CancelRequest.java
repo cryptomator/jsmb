@@ -15,6 +15,11 @@ import java.lang.foreign.MemorySegment;
  */
 public record CancelRequest(PacketHeader header, MemorySegment segment) implements SMB2Message {
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 4);
+	}
+
 	public char structureSize() {
 		return segment.get(Layouts.LE_UINT16, 0);
 	}

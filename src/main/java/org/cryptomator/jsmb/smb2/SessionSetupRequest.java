@@ -11,6 +11,11 @@ public record SessionSetupRequest(PacketHeader header, MemorySegment segment) im
 
 	public static final byte FLAG_BINDING = 0x01;
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 25) && SMB2Message.containsBuffer(segment, securityBufferOffset(), securityBufferLength());
+	}
+
 	public char structureSize() {
 		return segment.get(Layouts.LE_UINT16, 0); // should always be 25, regardless of security buffer
 	}

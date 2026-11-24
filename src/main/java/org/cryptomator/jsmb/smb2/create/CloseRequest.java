@@ -15,6 +15,11 @@ import java.lang.foreign.MemorySegment;
  */
 public record CloseRequest(PacketHeader header, MemorySegment segment) implements SMB2Message, FileIdCarrying {
 
+	@Override
+	public boolean isWellFormed() {
+		return SMB2Message.hasStructure(segment, 24);
+	}
+
 	/**
 	 * {@code SMB2_CLOSE_FLAG_POSTQUERY_ATTRIB} — client wants post-close basic + standard info in the response.
 	 */

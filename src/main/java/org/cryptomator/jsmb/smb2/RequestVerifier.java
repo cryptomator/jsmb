@@ -14,6 +14,7 @@ import java.util.OptionalInt;
  * Checks an incoming request against the connection's state before it is dispatched to its handler.
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/85df1680-2ee7-4d25-a916-a982371ddc75">Verifying the Signature</a>
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/853e5234-d5d6-4a18-a2f5-1c792e562947">Handling Incorrectly Formatted Requests</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/fba3123b-f566-4d8f-9715-0f529e856d25">Verifying the Credit Charge and the Payload Size</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/b495e2da-8711-4772-b292-453be0394b49">Verifying the Session</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/9a639360-87be-4d49-a1dd-4c6be0c020bd">Verifying the Tree Connect</a>
@@ -66,6 +67,11 @@ public class RequestVerifier {
 		} else if (!signed && !encrypted && session != null && session.signingRequired) {
 			// Deviating from the spec's wording, requests that arrived encrypted are exempt: they aren't signed, as the AEAD cipher already authenticates them.
 			return OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED);
+		}
+
+		// Handling Incorrectly Formatted Requests. Has to precede everything that reads the request's body.
+		if (!request.isWellFormed()) {
+			return OptionalInt.of(NTStatus.STATUS_INVALID_PARAMETER);
 		}
 
 		// Verifying the Credit Charge and the Payload Size
