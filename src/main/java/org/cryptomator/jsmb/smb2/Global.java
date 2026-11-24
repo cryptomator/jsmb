@@ -9,6 +9,7 @@ import org.cryptomator.jsmb.share.SmbShare;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
@@ -18,7 +19,8 @@ import java.util.concurrent.ConcurrentSkipListMap;
  */
 public class Global {
 
-	Map<Long, Session> sessionTable = new HashMap<>();
+	// shared by all connections, each of which is served by its own thread
+	final Map<Long, Session> sessionTable = new ConcurrentHashMap<>();
 	Map<Long, Object> clientTable = new HashMap<>(); // TODO: create Client class
 
 	/**

@@ -44,7 +44,7 @@ public class Session {
 	}
 
 	public int sessionGlobalId;
-	public State state;
+	public State state = State.IN_PROGRESS;
 	public Object securityContext = null; // TODO adjust type
 	public byte[] sessionKey = null;
 	public boolean signingRequired = false;
@@ -75,6 +75,17 @@ public class Session {
 		connection.sessionTable.put(session.sessionId, session);
 		session.sessionGlobalId = register();
 		return session;
+	}
+
+	/**
+	 * Removes this session from all tables it got registered with by {@link #create(Connection)}.
+	 *
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654">Handling GSS-API Authentication</a>
+	 */
+	public void remove() {
+		connection.global.sessionTable.remove(sessionId);
+		connection.sessionTable.remove(sessionId);
+		SrvsGlobal.INSTANCE.sessionList.remove(sessionGlobalId);
 	}
 
 	/**

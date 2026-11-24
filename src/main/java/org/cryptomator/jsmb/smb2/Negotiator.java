@@ -258,7 +258,8 @@ public record Negotiator(Server server, Connection connection) {
 			return gssAuthenticate(request, session); //TODO Handle reauthentication in gssAuthenticate
 		} else if (session.state == Session.State.VALID) { //Step 6
 			//See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
-			return gssAuthenticate(request, session); //TODO Handle reauthentication in gssAuthenticate
+			//TODO Handle reauthentication in gssAuthenticate. Until then, reject the request and keep the session as is.
+			return ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
 		} else { //Step 7
 			return gssAuthenticate(request, session);
 		}
@@ -334,6 +335,7 @@ public record Negotiator(Server server, Connection connection) {
 					session.encryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBS2CCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
 					session.decryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBC2SCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
 					session.encryptData = connection.global.encryptData && connection.cipherId != EncryptionCapabilities.NO_COMMON_CIPHER; // step 10
+					session.state = Session.State.VALID; // step 14
 					if (connection.global.debugEncryption) {
 						logSessionKeys(session);
 					}
@@ -356,9 +358,13 @@ public record Negotiator(Server server, Connection connection) {
 			// Malformed SPNEGO token / un-parseable NTLMSSP blob — respond with STATUS_INVALID_PARAMETER
 			// rather than letting the exception tear down the connection-handling thread.
 			LOG.debug("Malformed security blob in SESSION_SETUP", e);
+			session.remove();
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
 		} catch (NTStatusException e) {
 			// TODO log?
+			// "If the authentication protocol indicates an error, [...] the server MUST remove the session object from GlobalSessionTable and Connection.SessionTable".
+			// Opens and tree connects need no cleanup, as a session that is still InProgress can't have any.
+			session.remove();
 			return ErrorResponse.create(request, e.status);
 		}
 	}

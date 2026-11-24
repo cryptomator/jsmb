@@ -13,6 +13,7 @@ import org.cryptomator.jsmb.smb2.FileIdCarrying;
 import org.cryptomator.jsmb.smb2.LogoffRequest;
 import org.cryptomator.jsmb.smb2.NegotiateRequest;
 import org.cryptomator.jsmb.smb2.Negotiator;
+import org.cryptomator.jsmb.smb2.RequestVerifier;
 import org.cryptomator.jsmb.smb2.Runtime;
 import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.smb2.SMB2MessageParser;
@@ -46,7 +47,6 @@ import org.cryptomator.jsmb.smb2.tree.TreeConnectHandler;
 import org.cryptomator.jsmb.smb2.tree.TreeConnectRequest;
 import org.cryptomator.jsmb.smb2.tree.TreeDisconnectRequest;
 import org.cryptomator.jsmb.util.Layouts;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,6 +67,7 @@ class TcpConnection implements Runnable {
 	private final Server server;
 	private final Socket socket;
 	private final Connection connection;
+	private final RequestVerifier requestVerifier;
 	private final Negotiator negotiator;
 	private final Runtime runtime;
 	private final IoctlHandler ioctlHandler;
@@ -83,6 +84,7 @@ class TcpConnection implements Runnable {
 		this.server = server;
 		this.socket = socket;
 		this.connection = new Connection(server.global);
+		this.requestVerifier = new RequestVerifier(connection);
 		this.negotiator = new Negotiator(server, connection);
 		this.runtime = new Runtime(connection);
 		this.ioctlHandler = new IoctlHandler(connection);
@@ -182,7 +184,8 @@ class TcpConnection implements Runnable {
 			if (msg instanceof FileIdCarrying msgWithFile && chainedFileId != null && msg.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS)) {
 				msgWithFile.substituteFileIdIfSentinel(chainedFileId);
 			}
-			SMB2Message response = switch (msg) {
+			var rejection = requestVerifier.verify(msg);
+			SMB2Message response = rejection != null ? rejection : switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
 				case LogoffRequest request -> runtime.logoff(request);
@@ -269,9 +272,11 @@ class TcpConnection implements Runnable {
 	}
 
 	private SMB2Message sign(SMB2Message request, SMB2Message response) {
-		var sessionId = response.header().sessionId();
-		var session = connection.sessionTable.get(sessionId);
-		assert (sessionId == 0) == (session == null);
+		var session = connection.sessionTable.get(response.header().sessionId());
+		if (session == null || session.signingKey == null) {
+			// Nothing to sign with: the response is not bound to a session, its session is unknown or got removed (e.g. failed logon), or authentication hasn't completed yet.
+			return response;
+		}
 		if (shouldSign(request, response, session)) {
 			assert Objects.equals(connection.dialect, "3.1.1");
 			return response.sign(selectKey(response, session), connection);
@@ -282,13 +287,12 @@ class TcpConnection implements Runnable {
 	/**
 	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d594481c-f6d5-4de5-8842-9099063d41e7">Signing the Message</a>
 	 */
-	private boolean shouldSign(SMB2Message request, SMB2Message response, @Nullable Session session) {
+	private boolean shouldSign(SMB2Message request, SMB2Message response, Session session) {
 		var signed = !Arrays.equals(request.header().signature(), new byte[16]);
 		var sessionId = response.header().sessionId();
 		var treeId = response.header().treeId();
 
 		assert signed == request.header().hasFlag(SMB2Message.Flags.SIGNED);
-		assert (sessionId == 0) == (session == null);
 		if (signed && sessionId != 0 && treeId == 0 && session.signingRequired) {
 			return true;
 		}

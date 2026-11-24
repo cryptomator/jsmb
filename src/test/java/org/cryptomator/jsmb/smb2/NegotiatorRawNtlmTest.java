@@ -79,6 +79,38 @@ class NegotiatorRawNtlmTest {
 		Assertions.assertEquals(2, outbound[8], "MessageType = 2 (CHALLENGE_MESSAGE)");
 	}
 
+	@Test
+	@DisplayName("A failed second SESSION_SETUP leg removes the session from the connection's and the global session table")
+	void failedAuthenticationRemovesSession() {
+		var challenge = negotiator.sessionSetup(buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, 0L, 1L));
+		long sessionId = challenge.header().sessionId();
+		Assertions.assertTrue(connection.sessionTable.containsKey(sessionId));
+		// a NEGOTIATE_MESSAGE where the AUTHENTICATE_MESSAGE is due
+		var secondLeg = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, sessionId, 2L);
+
+		var response = negotiator.sessionSetup(secondLeg);
+
+		Assertions.assertInstanceOf(ErrorResponse.class, response);
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+		Assertions.assertFalse(connection.sessionTable.containsKey(sessionId));
+		Assertions.assertFalse(server.global.sessionTable.containsKey(sessionId));
+	}
+
+	@Test
+	@DisplayName("SESSION_SETUP on an already authenticated session is rejected with STATUS_NOT_SUPPORTED and leaves the session intact")
+	void reauthenticationNotSupported() {
+		var session = Session.create(connection);
+		session.state = Session.State.VALID;
+		var request = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, session.sessionId, 1L);
+
+		var response = negotiator.sessionSetup(request);
+
+		Assertions.assertInstanceOf(ErrorResponse.class, response);
+		Assertions.assertEquals(NTStatus.STATUS_NOT_SUPPORTED, response.header().status());
+		Assertions.assertSame(session, connection.sessionTable.get(session.sessionId));
+		Assertions.assertEquals(Session.State.VALID, session.state);
+	}
+
 	private static byte[] extractSecurityBuffer(SessionSetupResponse response) {
 		int offset = response.segment().get(Layouts.LE_UINT16, 4); // absolute from start of SMB2 header
 		int length = response.segment().get(Layouts.LE_UINT16, 6);
