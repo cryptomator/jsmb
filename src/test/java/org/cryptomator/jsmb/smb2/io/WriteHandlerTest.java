@@ -142,6 +142,19 @@ class WriteHandlerTest {
 	}
 
 	@Test
+	@DisplayName("FLUSH against a directory handle returns a FlushResponse")
+	void flushDirectoryHandle() throws IOException {
+		var backend = treeConnect.share().open("", new OpenParams(0, 0, OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE));
+		var directoryOpen = new Open(backend.fileId(), backend, session, treeConnect, "");
+		session.openTable.put(directoryOpen.fileId, directoryOpen);
+
+		var response = handler.flush(buildFlushRequest(directoryOpen.fileId));
+
+		Assertions.assertInstanceOf(FlushResponse.class, response);
+		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+	}
+
+	@Test
 	@DisplayName("FLUSH with unknown FileId returns STATUS_FILE_CLOSED")
 	void flushUnknownFileId() {
 		var response = handler.flush(buildFlushRequest(new FileId(0xAAL, 0xBBL)));

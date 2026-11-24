@@ -69,11 +69,11 @@ public record WriteHandler(Connection connection) {
 		if (open == null) {
 			return ErrorResponse.create(request, NTStatus.STATUS_FILE_CLOSED);
 		}
-		if (!(open.backend instanceof SmbFile file)) {
-			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_DEVICE_REQUEST);
-		}
 		try {
-			file.flush();
+			// A directory may be flushed as well. There is nothing cached for it that could be written out, so that succeeds right away.
+			if (open.backend instanceof SmbFile file) {
+				file.flush();
+			}
 		} catch (IOException e) {
 			LOG.warn("FLUSH fileId={} failed", open.fileId, e);
 			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
