@@ -25,7 +25,7 @@ The first invocation of `run-samba-scenario.sh` builds a small local image (alpi
 
 ## Running a scenario
 
-1. **Start the harness** in a terminal (port 4445, encryption + signing + `DEBUG_ENCRYPTION` enabled, share `data` backed by a fresh `@TempDir`, blocks on SIGTERM). Both the server and the wrapper default to 4445 — override with `-Djsmb.port=<port>` and matching `SAMBA_PORT=<port>` if you hit a bind collision (e.g. macOS's `upnotifyp` on some setups):
+1. **Start the harness** in a terminal (port 4445, `DEBUG_ENCRYPTION` enabled, clients without a cipher admitted on signed-only sessions, share `data` backed by a fresh `@TempDir`, blocks on SIGTERM). Both the server and the wrapper default to 4445 — override with `-Djsmb.port=<port>` and matching `SAMBA_PORT=<port>` if you hit a bind collision (e.g. macOS's `upnotifyp` on some setups):
    ```bash
    ./mvnw verify -Prun -Djsmb.config=DEBUG_ENCRYPTION
    ```

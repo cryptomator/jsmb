@@ -41,8 +41,8 @@ public class SigningIT {
 
 	@BeforeAll
 	public void setup() throws IOException {
-		// no ENCRYPT_DATA: the session stays unencrypted and therefore requires signing
-		server = Server.start(0, Config.create(Config.REQUIRE_MESSAGE_SIGNING), new Credentials("DOMAIN", "user", "password"));
+		// no REJECT_UNENCRYPTED_ACCESS: a client that negotiates no cipher gets a session that is signed but not encrypted
+		server = Server.start(0, Config.create(), new Credentials("DOMAIN", "user", "password"));
 		server.registerShare("data", new NioShare(shareRoot));
 		var config = SmbConfig.builder()
 				.withMultiProtocolNegotiate(true)

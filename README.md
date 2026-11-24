@@ -43,7 +43,7 @@ It is **test-only** and intentionally happy-path — production-grade backends a
 
 Three layers of state mirror MS-SMB2's "Per …" sections:
 
-- `smb2.Global` — server-wide. Holds the session table, the registered shares map (case-insensitive), and the behavioural toggles derived from `Config` (`encryptData`, `rejectUnencryptedAccess`, `requireMessageSigning`, `debugEncryption`). One instance per `TcpServer`.
+- `smb2.Global` — server-wide. Holds the session table, the registered shares map (case-insensitive), and the behavioural toggles derived from `Config` (`rejectUnencryptedAccess`, `debugEncryption`). `encryptData` and `requireMessageSigning` are always true: a session is encrypted if the client negotiated a cipher and requires signing otherwise. One instance per `TcpServer`.
 - `smb2.Connection` — per TCP connection. Holds negotiated dialect, client/server capabilities, cipher ID, signing algorithm, preauth integrity hash chain, and its own `sessionTable`.
 - `smb2.Session` — per authenticated SMB session. Holds `sessionKey` and the five keys derived from it via `NistSP800108KDF` (`signingKey`, `applicationKey`, `encryptionKey`, `decryptionKey`), NTLM session state, the preauth integrity hash snapshot, `openTable: Map<FileId, Open>`, `treeConnectTable: Map<Integer, TreeConnect>`, and a per-session `nextTreeId` allocator.
 
@@ -69,6 +69,7 @@ Embedders plug a filesystem-like backend in via the `SmbShare` / `SmbOpen` inter
 
 ### Signing and encryption
 
+- Policy, not configurable: a session is encrypted when the client negotiated a cipher and requires signing otherwise, so no session is ever neither. `Config.REJECT_UNENCRYPTED_ACCESS` additionally refuses clients that negotiated no cipher. `smb2.RequestVerifier` enforces both per request (MS-SMB2 3.3.5.2.4 and 3.3.5.2.9) before a handler runs.
 - `smb2.crypto.MessageSigner` implements AES-CMAC and AES-GMAC signatures for dialect 3.1.1. The CMAC path currently uses BouncyCastle's `CMac` — this is **temporary**; see the `TODO` in `pom.xml` / `module-info.java` referencing [issue #4](https://github.com/cryptomator/jsmb/issues/4). GMAC uses the JDK's `AES/GCM/NoPadding` and extracts the authentication tag from an empty-plaintext encryption over the header+body as AAD.
 - `smb2.crypto.MessageEncryptor` wraps SMB2 messages in an `SMB2 TRANSFORM_HEADER` via AES-GCM. The server advertises AES-256-GCM first and falls back to AES-128-GCM when the client only supports the latter (e.g. `smbj` 0.14). Session keys are derived from the session key via `NistSP800108KDF` with the MS-SMB2-specified labels (`SMBS2CCipherKey\0` for server→client, `SMBC2SCipherKey\0` for client→server).
 - `TcpConnection.shouldSign` / `selectKey` / `maybeEncrypt` encode the MS-SMB2 decision trees. The current implementation deliberately simplifies: `Channel` is not modelled, so `channelSigningKey` always returns `Session.signingKey`. If channel binding (`SessionSetupRequest.FLAG_BINDING`) is added, revisit both `Negotiator.gssAuthenticate` and `channelSigningKey`.
@@ -133,9 +134,7 @@ Start the server with `Config.DEBUG_ENCRYPTION` in the flag set — omitted by d
 import org.cryptomator.jsmb.Config;
 
 var flags = Config.create(
-        Config.ENCRYPT_DATA,
         Config.REJECT_UNENCRYPTED_ACCESS,
-        Config.REQUIRE_MESSAGE_SIGNING,
         Config.DEBUG_ENCRYPTION);
 try (var server = TcpServer.start(4445, flags)) { … }
 ```

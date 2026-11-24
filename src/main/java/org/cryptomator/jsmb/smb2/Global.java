@@ -41,9 +41,10 @@ public class Global {
 	// How this server announces itself in the NTLMv2 CHALLENGE_MESSAGE (NetBIOS / DNS computer + domain names).
 	public final ServerIdentity identity;
 
-	public final boolean encryptData;
+	// Not configurable: a session is encrypted if the client negotiated a cipher and requires signing otherwise, so no session is ever neither.
+	public final boolean encryptData = true;
+	public final boolean requireMessageSigning = true;
 	public final boolean rejectUnencryptedAccess;
-	public final boolean requireMessageSigning;
 	public final boolean debugEncryption;
 
 	public final boolean isMultiChannelCapable = false;
@@ -65,9 +66,7 @@ public class Global {
 	public Global(Set<Config> flags, Credentials credentials, ServerIdentity identity) {
 		this.credentials = credentials;
 		this.identity = identity;
-		this.encryptData = flags.contains(Config.ENCRYPT_DATA);
 		this.rejectUnencryptedAccess = flags.contains(Config.REJECT_UNENCRYPTED_ACCESS);
-		this.requireMessageSigning = flags.contains(Config.REQUIRE_MESSAGE_SIGNING);
 		this.debugEncryption = flags.contains(Config.DEBUG_ENCRYPTION);
 	}
 }

@@ -42,7 +42,7 @@ import java.util.concurrent.CountDownLatch;
  *   <tr><td>{@code jsmb.domain}</td><td>{@code DOMAIN}</td><td>NTLMv2 domain.</td></tr>
  *   <tr><td>{@code jsmb.user}</td><td>{@code user}</td><td>NTLMv2 username.</td></tr>
  *   <tr><td>{@code jsmb.password}</td><td>{@code password}</td><td>NTLMv2 password.</td></tr>
- *   <tr><td>{@code jsmb.config}</td><td>{@code ENCRYPT_DATA,REQUIRE_MESSAGE_SIGNING,DEBUG_ENCRYPTION}</td><td>Comma-separated {@link Config} flags.</td></tr>
+ *   <tr><td>{@code jsmb.config}</td><td>{@code DEBUG_ENCRYPTION}</td><td>Comma-separated {@link Config} flags.</td></tr>
  *   <tr><td>{@code jsmb.logLevel}</td><td>{@code DEBUG}</td><td>SLF4J SimpleLogger default level.</td></tr>
  * </table>
  * <p>
@@ -78,7 +78,7 @@ public class RunIT {
 				System.getProperty(PROP_DOMAIN, "DOMAIN"),
 				System.getProperty(PROP_USER, "user"),
 				System.getProperty(PROP_PASSWORD, "password"));
-		var config = parseConfig(System.getProperty(PROP_CONFIG, "ENCRYPT_DATA,REQUIRE_MESSAGE_SIGNING,DEBUG_ENCRYPTION"));
+		var config = parseConfig(System.getProperty(PROP_CONFIG, "DEBUG_ENCRYPTION"));
 
 		try (var server = Server.start(port, config, credentials)) {
 			server.registerShare(shareName, new NioShare(shareRoot));
