@@ -22,6 +22,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -160,6 +162,39 @@ class SetInfoHandlerTest {
 		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
 		var actual = Files.getLastModifiedTime(targetFile).toInstant().truncatedTo(ChronoUnit.SECONDS);
 		Assertions.assertEquals(newWriteTime, actual);
+	}
+
+	@ParameterizedTest(name = "LastWriteTime = {0}")
+	@DisplayName("FileBasicInformation leaves a timestamp alone if its value is 0, -1 or -2")
+	@ValueSource(longs = {0L, -1L, -2L})
+	void setBasicInformationWithoutTimestamp(long lastWriteTime) throws IOException {
+		var before = Files.getLastModifiedTime(targetFile);
+		byte[] payload = new byte[40];
+		MemorySegment.ofArray(payload).set(Layouts.LE_INT64, 16, lastWriteTime);
+
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 4, payload));
+
+		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+		Assertions.assertEquals(before, Files.getLastModifiedTime(targetFile));
+	}
+
+	@Test
+	@DisplayName("FileBasicInformation with a timestamp below -2 returns STATUS_INVALID_PARAMETER")
+	void setBasicInformationWithInvalidTimestamp() {
+		byte[] payload = new byte[40];
+		MemorySegment.ofArray(payload).set(Layouts.LE_INT64, 16, -3L);
+
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 4, payload));
+
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+	}
+
+	@Test
+	@DisplayName("FileBasicInformation shorter than 40 bytes returns STATUS_INFO_LENGTH_MISMATCH")
+	void setBasicInformationTooShort() {
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 4, new byte[36]));
+
+		Assertions.assertEquals(NTStatus.STATUS_INFO_LENGTH_MISMATCH, response.header().status());
 	}
 
 	@Test

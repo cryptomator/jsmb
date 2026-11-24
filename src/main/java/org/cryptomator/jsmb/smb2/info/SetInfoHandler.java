@@ -87,12 +87,17 @@ public record SetInfoHandler(Connection connection) {
 
 	/**
 	 * MS-FSCC 2.4.7 — 40 bytes: 4x FILETIME + FileAttributes + Reserved. A FILETIME of {@code 0} means
-	 * "don't change"; any non-zero value replaces the stored timestamp. {@code FileAttributes == 0}
+	 * "don't change"; any positive value replaces the stored timestamp. {@code FileAttributes == 0}
 	 * likewise leaves attributes alone.
 	 */
 	private int applyBasic(Open open, MemorySegment buffer) throws IOException {
-		if (buffer.byteSize() < 36) {
+		if (buffer.byteSize() < 40) {
 			return NTStatus.STATUS_INFO_LENGTH_MISMATCH;
+		}
+		for (int offset = 0; offset < 32; offset += Long.BYTES) {
+			if (buffer.get(Layouts.LE_INT64, offset) < -2L) {
+				return NTStatus.STATUS_INVALID_PARAMETER; // "This field MUST NOT be set to a value less than -2."
+			}
 		}
 		Instant creation = readFileTime(buffer, 0);
 		Instant lastAccess = readFileTime(buffer, 8);
@@ -162,9 +167,11 @@ public record SetInfoHandler(Connection connection) {
 		return NTStatus.STATUS_SUCCESS;
 	}
 
+	// Yields null for "don't change", which besides 0 covers -1 and -2. Those two switch the implicit updating of the timestamp off and on again for further operations on the handle;
+	// they don't carry a timestamp to store. Suppressing implicit updates is not supported, as that is up to the backend.
 	private static Instant readFileTime(MemorySegment buffer, int offset) {
 		long value = buffer.get(Layouts.LE_INT64, offset);
-		return value == 0L ? null : WinFileTime.toInstant(value);
+		return value <= 0L ? null : WinFileTime.toInstant(value);
 	}
 
 	private PacketHeader buildResponseHeader(SetInfoRequest request) {
