@@ -11,8 +11,11 @@ public record Runtime(Connection connection) {
 	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/a6fbc502-75a5-42ef-a88c-c67b44817850">Receiving an SMB2 LOGOFF Request</a>
 	 */
 	public SMB2Message logoff(LogoffRequest request) {
-		//TODO Perform actual logoff and free resources
-
+		var session = connection.sessionTable.get(request.header().sessionId());
+		if (session == null) {
+			return ErrorResponse.create(request, NTStatus.STATUS_USER_SESSION_DELETED);
+		}
+		session.remove();
 		return new LogoffResponse(buildResponseHeader(request, Command.LOGOFF, 0, NTStatus.STATUS_SUCCESS));
 	}
 

@@ -103,6 +103,14 @@ public record TreeConnectHandler(Connection connection) {
 		if (removed == null) {
 			return ErrorResponse.create(request, NTStatus.STATUS_NETWORK_NAME_DELETED);
 		}
+		// the opens of the tree go with it; without it, the client couldn't even close them anymore
+		session.openTable.values().removeIf(open -> {
+			if (open.treeConnect == removed) {
+				open.close();
+				return true;
+			}
+			return false;
+		});
 		LOG.debug("TREE_DISCONNECT treeId=0x{} ('{}')", Integer.toHexString(treeId), removed.shareName());
 		return new TreeDisconnectResponse(buildResponseHeader(request, Command.TREE_DISCONNECT, treeId));
 	}

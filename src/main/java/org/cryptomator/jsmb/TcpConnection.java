@@ -59,6 +59,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.net.Socket;
+import java.util.List;
 import java.util.Objects;
 
 import static org.cryptomator.jsmb.smb2.negotiate.GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
@@ -152,6 +153,10 @@ class TcpConnection implements Runnable {
 			LOG.warn("Disconnecting client: {}", e.getMessage());
 		} catch (MalformedMessageException | IOException | AEADBadTagException e) {
 			LOG.error("Exception while reading packet", e);
+		} finally {
+			// Handling Loss of a Connection: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/eb5bfe99-47fe-4e87-8e87-08a084dcefb6
+			// A copy, as removing a session alters the table. No session spans several connections, as there are no channels.
+			List.copyOf(connection.sessionTable.values()).forEach(Session::remove);
 		}
 	}
 
@@ -209,6 +214,8 @@ class TcpConnection implements Runnable {
 					msgWithFile.substituteFileIdIfSentinel(chainedFileId);
 				}
 			}
+			// looked up before dispatching, as a LOGOFF response still has to be signed or encrypted with the keys of the session it just removed
+			var sessionBefore = sessionId == null ? null : connection.sessionTable.get(sessionId);
 			SMB2Message response = rejection.isPresent() ? reject(msg, rejection.getAsInt()) : switch (msg) {
 				case NegotiateRequest request -> negotiator.negotiate(request);
 				case SessionSetupRequest request -> negotiator.sessionSetup(request);
@@ -249,9 +256,20 @@ class TcpConnection implements Runnable {
 			if (response instanceof CreateResponse cr) {
 				chainedFileId = cr.fileId();
 			}
-			var signed = sign(msg, response);
-			writeWire(maybeEncrypt(signed, requestEncrypted));
+			var session = sessionOf(response, sessionBefore);
+			var signed = sign(msg, response, session);
+			writeWire(maybeEncrypt(signed, requestEncrypted, session));
 		} while (nextCommand != 0);
+	}
+
+	// The session whose keys protect a response: the one named in its header (which SESSION_SETUP may just have created) or, if that one is gone by now, the one the request was processed with.
+	private @Nullable Session sessionOf(SMB2Message response, @Nullable Session sessionBefore) {
+		long sessionId = response.header().sessionId();
+		var session = connection.sessionTable.get(sessionId);
+		if (session == null && sessionBefore != null && sessionBefore.sessionId == sessionId) {
+			return sessionBefore;
+		}
+		return session;
 	}
 
 	private static @Nullable SMB2Message reject(SMB2Message request, int status) {
@@ -269,14 +287,13 @@ class TcpConnection implements Runnable {
 	 *   <li>{@code Session.EncryptData} is true (and the command is not {@code NEGOTIATE} or {@code SESSION_SETUP}).</li>
 	 * </ul>
 	 */
-	private byte[] maybeEncrypt(SMB2Message response, boolean requestEncrypted) {
+	private byte[] maybeEncrypt(SMB2Message response, boolean requestEncrypted, @Nullable Session session) {
 		byte[] plain = response.serialize();
 		var command = Command.valueOf(response.header().command());
 		// NEGOTIATE and SESSION_SETUP responses are never encrypted, per MS-SMB2 3.3.4.1.4
 		if (command == Command.NEGOTIATE || command == Command.SESSION_SETUP) {
 			return plain;
 		}
-		var session = connection.sessionTable.get(response.header().sessionId());
 		if (session == null || session.encryptionKey == null) {
 			// no session keys available — can't encrypt even if we wanted to
 			return plain;
@@ -304,8 +321,7 @@ class TcpConnection implements Runnable {
 		}
 	}
 
-	private SMB2Message sign(SMB2Message request, SMB2Message response) {
-		var session = connection.sessionTable.get(response.header().sessionId());
+	private SMB2Message sign(SMB2Message request, SMB2Message response, @Nullable Session session) {
 		if (session == null || session.signingKey == null) {
 			// Nothing to sign with: the response is not bound to a session, its session is unknown or got removed (e.g. failed logon), or authentication hasn't completed yet.
 			return response;

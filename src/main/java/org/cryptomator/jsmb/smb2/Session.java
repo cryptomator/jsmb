@@ -78,11 +78,17 @@ public class Session {
 	}
 
 	/**
-	 * Removes this session from all tables it got registered with by {@link #create(Connection)}.
+	 * Ends this session: closes its opens, disconnects its tree connects and removes it from all tables it got registered with by {@link #create(Connection)}.
 	 *
 	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654">Handling GSS-API Authentication</a>
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/a6fbc502-75a5-42ef-a88c-c67b44817850">Receiving an SMB2 LOGOFF Request</a>
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/eb5bfe99-47fe-4e87-8e87-08a084dcefb6">Handling Loss of a Connection</a>
 	 */
 	public void remove() {
+		// no open is preserved for a reconnect, as there are neither durable nor resilient nor persistent handles
+		openTable.values().forEach(Open::close);
+		openTable.clear();
+		treeConnectTable.clear();
 		connection.global.sessionTable.remove(sessionId);
 		connection.sessionTable.remove(sessionId);
 		SrvsGlobal.INSTANCE.sessionList.remove(sessionGlobalId);

@@ -16,13 +16,30 @@ import java.lang.foreign.MemorySegment;
 
 class RuntimeTest {
 
+	private Connection connection;
 	private Runtime runtime;
 
 	@BeforeEach
 	void setUp() {
 		var global = new Global(Config.DEFAULT, new Credentials("DOMAIN", "user", "password"));
-		var connection = new Connection(global);
+		connection = new Connection(global);
 		runtime = new Runtime(connection);
+	}
+
+	@Test
+	@DisplayName("LOGOFF removes the session and is acknowledged with STATUS_SUCCESS")
+	void logoff() {
+		var session = Session.create(connection);
+		var header = PacketHeader.builder().command(Command.LOGOFF.value()).sessionId(session.sessionId).build();
+		var bodySeg = MemorySegment.ofArray(new byte[4]);
+		bodySeg.set(Layouts.LE_UINT16, 0, (char) 4);
+		var request = new LogoffRequest(header, bodySeg);
+
+		var response = runtime.logoff(request);
+
+		Assertions.assertInstanceOf(LogoffResponse.class, response);
+		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+		Assertions.assertFalse(connection.sessionTable.containsKey(session.sessionId));
 	}
 
 	@Test

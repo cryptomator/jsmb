@@ -8,20 +8,27 @@ import org.cryptomator.jsmb.share.FsSize;
 import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.SmbOpen;
 import org.cryptomator.jsmb.share.SmbShare;
+import org.cryptomator.jsmb.share.nio.NioShare;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
 import org.cryptomator.jsmb.smb2.Global;
+import org.cryptomator.jsmb.smb2.Open;
 import org.cryptomator.jsmb.smb2.PacketHeader;
 import org.cryptomator.jsmb.smb2.Session;
+import org.cryptomator.jsmb.smb2.TreeConnect;
 import org.cryptomator.jsmb.util.Layouts;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 class TreeConnectHandlerTest {
 
@@ -142,6 +149,35 @@ class TreeConnectHandlerTest {
 		Assertions.assertInstanceOf(TreeDisconnectResponse.class, response);
 		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
 		Assertions.assertTrue(session.treeConnectTable.isEmpty());
+	}
+
+	@Test
+	@DisplayName("TREE_DISCONNECT closes the opens of the disconnected tree and leaves those of other trees alone")
+	void disconnectClosesOpensOfTree(@TempDir Path shareRoot) throws IOException {
+		var nioShare = new NioShare(shareRoot);
+		var disconnected = new TreeConnect(1, "data", nioShare, 0x001F01FF);
+		var remaining = new TreeConnect(2, "data", nioShare, 0x001F01FF);
+		session.treeConnectTable.put(1, disconnected);
+		session.treeConnectTable.put(2, remaining);
+		// closing the backend handle is what carries out the pending deletion, which makes it observable
+		var closed = openForDeletion(nioShare, shareRoot, "closed.txt", disconnected);
+		var kept = openForDeletion(nioShare, shareRoot, "kept.txt", remaining);
+
+		handler.disconnect(buildDisconnectRequest(session.sessionId, 1));
+
+		Assertions.assertFalse(Files.exists(shareRoot.resolve("closed.txt")));
+		Assertions.assertFalse(session.openTable.containsKey(closed.fileId));
+		Assertions.assertTrue(Files.exists(shareRoot.resolve("kept.txt")));
+		Assertions.assertTrue(session.openTable.containsKey(kept.fileId));
+	}
+
+	private Open openForDeletion(NioShare nioShare, Path shareRoot, String name, TreeConnect treeConnect) throws IOException {
+		Files.writeString(shareRoot.resolve(name), "content");
+		var backend = nioShare.open(name, new OpenParams(0x00130089, 0x00000007, OpenParams.Disposition.OPEN, 0));
+		backend.markForDeletion();
+		var open = new Open(backend.fileId(), backend, session, treeConnect, name);
+		session.openTable.put(open.fileId, open);
+		return open;
 	}
 
 	@Test

@@ -133,7 +133,7 @@ public record CreateHandler(Connection connection) {
 				LOG.debug("CLOSE post-query attrib failed", e);
 			}
 		}
-		closeQuietly(open.backend);
+		open.close();
 		LOG.debug("CLOSE fileId={}", open.fileId);
 
 		var header = buildResponseHeader(request, Command.CLOSE, request.header().treeId());

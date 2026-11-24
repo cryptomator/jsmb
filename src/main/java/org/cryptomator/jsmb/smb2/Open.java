@@ -4,7 +4,10 @@ import org.cryptomator.jsmb.share.DirEntry;
 import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.share.SmbOpen;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -14,6 +17,8 @@ import java.util.List;
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/96ee4d9d-9f45-48a6-9d55-cd06dfe8a22a">MS-SMB2 3.3.1.10 Per Open</a>
  */
 public class Open {
+
+	private static final Logger LOG = LoggerFactory.getLogger(Open.class);
 
 	public final FileId fileId;
 	public final SmbOpen backend;
@@ -45,5 +50,17 @@ public class Open {
 		this.session = session;
 		this.treeConnect = treeConnect;
 		this.path = path;
+	}
+
+	/**
+	 * Releases the backend handle, as part of closing an open (MS-SMB2 3.3.4.17). A failure to do so is logged and otherwise ignored, as the open is given up either way.
+	 * Removing the open from {@code Session.openTable} is up to the caller.
+	 */
+	public void close() {
+		try {
+			backend.close();
+		} catch (IOException e) {
+			LOG.debug("Closing '{}' failed", path, e);
+		}
 	}
 }
