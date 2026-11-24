@@ -31,13 +31,14 @@ public final class DirectoryInfoWriter {
 	 * entries fit. An {@code entriesWritten} of {@code 0} with a non-empty remaining range means not
 	 * even the first entry fit — the caller should map that to {@code STATUS_INFO_LENGTH_MISMATCH}.
 	 *
+	 * @param directoryPath  path of the listed directory relative to the share root, forward-slash delimited, empty for the share root. File IDs are derived from it.
 	 * @param cls            info class to render
 	 * @param entries        pre-collected directory listing (so we can peek/lookahead cheaply)
 	 * @param startIndex     next entry to render
 	 * @param maxBufferLen   upper bound on the returned buffer length
 	 * @param singleEntry    true when {@code SL_RETURN_SINGLE_ENTRY} is set
 	 */
-	public static Result write(FileInformationClass cls, List<DirEntry> entries, int startIndex, int maxBufferLen, boolean singleEntry) {
+	public static Result write(String directoryPath, FileInformationClass cls, List<DirEntry> entries, int startIndex, int maxBufferLen, boolean singleEntry) {
 		var buf = ByteBuffer.allocate(maxBufferLen).order(ByteOrder.LITTLE_ENDIAN);
 		int written = 0;
 		int lastEntryOffset = -1;
@@ -61,7 +62,7 @@ public final class DirectoryInfoWriter {
 				buf.putInt(lastEntryOffset, entryStart - lastEntryOffset);
 			}
 
-			writeEntry(buf, cls, entry, nameBytes);
+			writeEntry(buf, cls, entry, nameBytes, fileId(directoryPath, entry.name()));
 			for (int p = 0; p < paddingAfter; p++) buf.put((byte) 0);
 
 			lastEntryOffset = entryStart;
@@ -91,15 +92,26 @@ public final class DirectoryInfoWriter {
 		};
 	}
 
-	private static void writeEntry(ByteBuffer buf, FileInformationClass cls, DirEntry entry, byte[] nameBytes) {
+	private static void writeEntry(ByteBuffer buf, FileInformationClass cls, DirEntry entry, byte[] nameBytes, long fileId) {
 		switch (cls) {
 			case FILE_DIRECTORY_INFORMATION -> writeDirectoryInfo(buf, entry, nameBytes);
 			case FILE_FULL_DIRECTORY_INFORMATION -> writeFullDirectoryInfo(buf, entry, nameBytes);
 			case FILE_BOTH_DIRECTORY_INFORMATION -> writeBothDirectoryInfo(buf, entry, nameBytes);
 			case FILE_NAMES_INFORMATION -> writeNamesInfo(buf, entry, nameBytes);
-			case FILE_ID_FULL_DIRECTORY_INFORMATION -> writeIdFullDirectoryInfo(buf, entry, nameBytes);
-			case FILE_ID_BOTH_DIRECTORY_INFORMATION -> writeIdBothDirectoryInfo(buf, entry, nameBytes);
+			case FILE_ID_FULL_DIRECTORY_INFORMATION -> writeIdFullDirectoryInfo(buf, entry, nameBytes, fileId);
+			case FILE_ID_BOTH_DIRECTORY_INFORMATION -> writeIdBothDirectoryInfo(buf, entry, nameBytes, fileId);
 		}
+	}
+
+	// The same ID that FileInternalInformation reports for an open of the entry: the hash of its path relative to the share root.
+	// "." is the listed directory itself and ".." its parent.
+	static long fileId(String directoryPath, String entryName) {
+		String path = switch (entryName) {
+			case "." -> directoryPath;
+			case ".." -> directoryPath.substring(0, Math.max(0, directoryPath.lastIndexOf('/')));
+			default -> directoryPath.isEmpty() ? entryName : directoryPath + "/" + entryName;
+		};
+		return InodeHash.of(path);
 	}
 
 	private static void writeCommonTimesAndSizes(ByteBuffer buf, DirEntry entry) {
@@ -143,7 +155,7 @@ public final class DirectoryInfoWriter {
 		buf.put(nameBytes);
 	}
 
-	private static void writeIdBothDirectoryInfo(ByteBuffer buf, DirEntry entry, byte[] nameBytes) {
+	private static void writeIdBothDirectoryInfo(ByteBuffer buf, DirEntry entry, byte[] nameBytes, long fileId) {
 		buf.putInt(0);
 		buf.putInt(0);
 		writeCommonTimesAndSizes(buf, entry);
@@ -153,18 +165,18 @@ public final class DirectoryInfoWriter {
 		buf.put((byte) 0);               // Reserved1
 		buf.put(EMPTY_SHORT_NAME);
 		buf.putShort((short) 0);         // Reserved2
-		buf.putLong(InodeHash.of(entry.name()));
+		buf.putLong(fileId);
 		buf.put(nameBytes);
 	}
 
-	private static void writeIdFullDirectoryInfo(ByteBuffer buf, DirEntry entry, byte[] nameBytes) {
+	private static void writeIdFullDirectoryInfo(ByteBuffer buf, DirEntry entry, byte[] nameBytes, long fileId) {
 		buf.putInt(0);
 		buf.putInt(0);
 		writeCommonTimesAndSizes(buf, entry);
 		buf.putInt(nameBytes.length);
 		buf.putInt(0);                   // EaSize
 		buf.putInt(0);                   // Reserved
-		buf.putLong(InodeHash.of(entry.name()));
+		buf.putLong(fileId);
 		buf.put(nameBytes);
 	}
 

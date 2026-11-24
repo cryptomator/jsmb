@@ -83,7 +83,7 @@ public record QueryDirectoryHandler(Connection connection) {
 			return ErrorResponse.create(request, status);
 		}
 
-		var result = DirectoryInfoWriter.write(cls, entries, open.nextDirectoryIndex,
+		var result = DirectoryInfoWriter.write(open.path, cls, entries, open.nextDirectoryIndex,
 				request.outputBufferLength(),
 				request.hasFlag(QueryDirectoryRequest.FLAG_RETURN_SINGLE_ENTRY));
 

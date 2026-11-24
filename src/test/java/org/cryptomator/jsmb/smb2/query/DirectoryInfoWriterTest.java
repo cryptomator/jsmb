@@ -3,11 +3,14 @@ package org.cryptomator.jsmb.smb2.query;
 import org.cryptomator.jsmb.share.DirEntry;
 import org.cryptomator.jsmb.share.FileBasicInfo;
 import org.cryptomator.jsmb.share.FileStandardInfo;
+import org.cryptomator.jsmb.util.InodeHash;
 import org.cryptomator.jsmb.util.Layouts;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
@@ -25,6 +28,35 @@ class DirectoryInfoWriterTest {
 				new FileStandardInfo(size, size, 1, false, dir));
 	}
 
+	@ParameterizedTest(name = "\"{1}\" in \"{0}\" is \"{2}\"")
+	@DisplayName("The file ID of a directory entry is derived from its path relative to the share root")
+	@CsvSource(textBlock = """
+			'',        a.txt, a.txt
+			sub,       a.txt, sub/a.txt
+			sub/inner, a.txt, sub/inner/a.txt
+			sub/inner, .,     sub/inner
+			sub/inner, ..,    sub
+			sub,       ..,    ''
+			'',        .,     ''
+			""")
+	void fileIdFromPath(String directoryPath, String entryName, String expectedPath) {
+		long fileId = DirectoryInfoWriter.fileId(directoryPath, entryName);
+
+		Assertions.assertEquals(InodeHash.of(expectedPath), fileId);
+	}
+
+	@Test
+	@DisplayName("FILE_ID_BOTH_DIRECTORY_INFORMATION carries the file ID of the entry's full path")
+	void fileIdInListing() {
+		var result = DirectoryInfoWriter.write("sub",
+				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
+				List.of(entry("a.txt", 1, false)),
+				0, 4096, false);
+
+		long fileId = MemorySegment.ofArray(result.buffer()).get(Layouts.LE_INT64, 96); // FileId follows the 96 bytes up to and including Reserved2
+		Assertions.assertEquals(InodeHash.of("sub/a.txt"), fileId);
+	}
+
 	@Nested
 	@DisplayName("FILE_ID_BOTH_DIRECTORY_INFORMATION")
 	class IdBoth {
@@ -37,7 +69,7 @@ class DirectoryInfoWriterTest {
 			int expectedUnaligned = 104 + nameBytes.length;
 			int expectedAligned = (expectedUnaligned + 7) & ~7;
 
-			var result = DirectoryInfoWriter.write(
+			var result = DirectoryInfoWriter.write("",
 					FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
 					List.of(entry(name, 1234, false)),
 					0, 4096, false);
@@ -56,7 +88,7 @@ class DirectoryInfoWriterTest {
 		@Test
 		@DisplayName("Chains entries via NextEntryOffset with 8-byte alignment")
 		void multipleEntriesChained() {
-			var result = DirectoryInfoWriter.write(
+			var result = DirectoryInfoWriter.write("",
 					FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
 					List.of(entry("a.txt", 1, false), entry("b.txt", 2, false), entry("c.txt", 3, false)),
 					0, 4096, false);
@@ -84,7 +116,7 @@ class DirectoryInfoWriterTest {
 			int alignedOne = (oneEntrySize + 7) & ~7;
 
 			// Room for exactly two entries' worth of space
-			var result = DirectoryInfoWriter.write(
+			var result = DirectoryInfoWriter.write("",
 					FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
 					entries, 0, alignedOne * 2 + 4, false);
 
@@ -94,7 +126,7 @@ class DirectoryInfoWriterTest {
 		@Test
 		@DisplayName("Returns 0 entries when the first one alone is too large")
 		void zeroWhenFirstDoesNotFit() {
-			var result = DirectoryInfoWriter.write(
+			var result = DirectoryInfoWriter.write("",
 					FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
 					List.of(entry("file.txt", 1, false)),
 					0, 32, false);
@@ -105,7 +137,7 @@ class DirectoryInfoWriterTest {
 		@Test
 		@DisplayName("SL_RETURN_SINGLE_ENTRY caps at one entry even with room for more")
 		void singleEntryCap() {
-			var result = DirectoryInfoWriter.write(
+			var result = DirectoryInfoWriter.write("",
 					FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
 					List.of(entry("a.txt", 1, false), entry("b.txt", 2, false)),
 					0, 4096, true);
@@ -118,7 +150,7 @@ class DirectoryInfoWriterTest {
 		void startIndexResumes() {
 			var entries = List.of(entry("a.txt", 1, false), entry("b.txt", 2, false), entry("c.txt", 3, false));
 
-			var page2 = DirectoryInfoWriter.write(
+			var page2 = DirectoryInfoWriter.write("",
 					FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
 					entries, 2, 4096, false);
 
@@ -153,7 +185,7 @@ class DirectoryInfoWriterTest {
 			byte[] nameBytes = name.getBytes(StandardCharsets.UTF_16LE);
 			int expectedAligned = ((12 + nameBytes.length) + 7) & ~7;
 
-			var result = DirectoryInfoWriter.write(
+			var result = DirectoryInfoWriter.write("",
 					FileInformationClass.FILE_NAMES_INFORMATION,
 					List.of(entry(name, 0, false)),
 					0, 4096, false);
@@ -175,7 +207,7 @@ class DirectoryInfoWriterTest {
 		void layout() {
 			var name = "file.txt";
 			byte[] nameBytes = name.getBytes(StandardCharsets.UTF_16LE);
-			var result = DirectoryInfoWriter.write(
+			var result = DirectoryInfoWriter.write("",
 					FileInformationClass.FILE_BOTH_DIRECTORY_INFORMATION,
 					List.of(entry(name, 42, false)),
 					0, 4096, false);
