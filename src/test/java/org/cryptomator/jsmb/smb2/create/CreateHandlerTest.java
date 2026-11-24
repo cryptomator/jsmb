@@ -90,6 +90,28 @@ class CreateHandlerTest {
 		}
 
 		@Test
+		@DisplayName("CREATE with FILE_DIRECTORY_FILE on an existing file returns STATUS_NOT_A_DIRECTORY")
+		void openFileAsDirectoryFails() throws IOException {
+			Files.createFile(shareRoot.resolve("file.txt"));
+
+			var response = handler.create(buildCreateRequest("file.txt", OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE));
+
+			Assertions.assertEquals(NTStatus.STATUS_NOT_A_DIRECTORY, response.header().status());
+			Assertions.assertTrue(session.openTable.isEmpty());
+		}
+
+		@Test
+		@DisplayName("CREATE with FILE_NON_DIRECTORY_FILE on an existing directory returns STATUS_FILE_IS_A_DIRECTORY")
+		void openDirectoryAsFileFails() throws IOException {
+			Files.createDirectory(shareRoot.resolve("dir"));
+
+			var response = handler.create(buildCreateRequest("dir", OpenParams.Disposition.OPEN, OpenParams.OPTION_NON_DIRECTORY_FILE));
+
+			Assertions.assertEquals(NTStatus.STATUS_FILE_IS_A_DIRECTORY, response.header().status());
+			Assertions.assertTrue(session.openTable.isEmpty());
+		}
+
+		@Test
 		@DisplayName("CREATE with CREATE on an existing path returns STATUS_OBJECT_NAME_COLLISION")
 		void createExistingFileFails() throws IOException {
 			Files.createFile(shareRoot.resolve("existing.txt"));

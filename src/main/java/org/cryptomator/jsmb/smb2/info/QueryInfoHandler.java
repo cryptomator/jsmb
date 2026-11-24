@@ -70,8 +70,11 @@ public record QueryInfoHandler(Server server, Connection connection) {
 		} catch (UnsupportedInfoClassException e) {
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_INFO_CLASS);
 		} catch (IOException e) {
-			LOG.warn("QUERY_INFO backend query failed", e);
-			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
+			int status = NTStatus.of(e);
+			if (status == NTStatus.STATUS_UNEXPECTED_IO_ERROR) {
+				LOG.warn("QUERY_INFO backend query failed", e);
+			}
+			return ErrorResponse.create(request, status);
 		}
 	}
 

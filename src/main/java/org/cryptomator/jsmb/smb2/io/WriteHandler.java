@@ -48,8 +48,11 @@ public record WriteHandler(Connection connection) {
 		try {
 			bytesWritten = file.write(src, request.offset());
 		} catch (IOException e) {
-			LOG.warn("WRITE fileId={} offset={} length={} failed", open.fileId, request.offset(), length, e);
-			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
+			int status = NTStatus.of(e);
+			if (status == NTStatus.STATUS_UNEXPECTED_IO_ERROR) {
+				LOG.warn("WRITE fileId={} offset={} length={} failed", open.fileId, request.offset(), length, e);
+			}
+			return ErrorResponse.create(request, status);
 		}
 
 		LOG.debug("WRITE fileId={} offset={} wrote {}/{} bytes", open.fileId, request.offset(), bytesWritten, length);
@@ -75,8 +78,11 @@ public record WriteHandler(Connection connection) {
 				file.flush();
 			}
 		} catch (IOException e) {
-			LOG.warn("FLUSH fileId={} failed", open.fileId, e);
-			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
+			int status = NTStatus.of(e);
+			if (status == NTStatus.STATUS_UNEXPECTED_IO_ERROR) {
+				LOG.warn("FLUSH fileId={} failed", open.fileId, e);
+			}
+			return ErrorResponse.create(request, status);
 		}
 		LOG.debug("FLUSH fileId={}", open.fileId);
 		return new FlushResponse(buildResponseHeader(request, Command.FLUSH));

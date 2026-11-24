@@ -4,6 +4,8 @@ import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.FileBasicInfo;
 import org.cryptomator.jsmb.share.FileStandardInfo;
 import org.cryptomator.jsmb.share.OpenParams;
+import org.cryptomator.jsmb.share.SmbDirectory;
+import org.cryptomator.jsmb.share.SmbFile;
 import org.cryptomator.jsmb.share.SmbOpen;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
@@ -16,9 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.AccessDeniedException;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.NoSuchFileException;
 import java.util.List;
 
 /**
@@ -57,15 +56,22 @@ public record CreateHandler(Connection connection) {
 		SmbOpen backend;
 		try {
 			backend = treeConnect.share().open(name, params);
-		} catch (NoSuchFileException e) {
-			return ErrorResponse.create(request, NTStatus.STATUS_OBJECT_NAME_NOT_FOUND);
-		} catch (FileAlreadyExistsException e) {
-			return ErrorResponse.create(request, NTStatus.STATUS_OBJECT_NAME_COLLISION);
-		} catch (AccessDeniedException e) {
-			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		} catch (IOException e) {
-			LOG.warn("CREATE '{}' failed", name, e);
-			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
+			int status = NTStatus.of(e);
+			if (status == NTStatus.STATUS_UNEXPECTED_IO_ERROR) {
+				LOG.warn("CREATE '{}' failed", name, e);
+			}
+			return ErrorResponse.create(request, status);
+		}
+		// MS-SMB2 2.2.13: FILE_DIRECTORY_FILE on a file fails with STATUS_NOT_A_DIRECTORY, FILE_NON_DIRECTORY_FILE on a directory with STATUS_FILE_IS_A_DIRECTORY.
+		// A backend may report these itself. This covers one that simply opens what it finds.
+		if ((request.createOptions() & OpenParams.OPTION_DIRECTORY_FILE) != 0 && backend instanceof SmbFile) {
+			closeQuietly(backend);
+			return ErrorResponse.create(request, NTStatus.STATUS_NOT_A_DIRECTORY);
+		}
+		if ((request.createOptions() & OpenParams.OPTION_NON_DIRECTORY_FILE) != 0 && backend instanceof SmbDirectory) {
+			closeQuietly(backend);
+			return ErrorResponse.create(request, NTStatus.STATUS_FILE_IS_A_DIRECTORY);
 		}
 
 		if ((request.createOptions() & OpenParams.OPTION_DELETE_ON_CLOSE) != 0) {
@@ -79,8 +85,11 @@ public record CreateHandler(Connection connection) {
 			standard = backend.queryStandard();
 		} catch (IOException e) {
 			closeQuietly(backend);
-			LOG.warn("CREATE '{}' post-open query failed", name, e);
-			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
+			int status = NTStatus.of(e);
+			if (status == NTStatus.STATUS_UNEXPECTED_IO_ERROR) {
+				LOG.warn("CREATE '{}' post-open query failed", name, e);
+			}
+			return ErrorResponse.create(request, status);
 		}
 
 		var fileId = backend.fileId();

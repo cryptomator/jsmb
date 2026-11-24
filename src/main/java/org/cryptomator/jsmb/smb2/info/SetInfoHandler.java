@@ -17,9 +17,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AccessDeniedException;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.NoSuchFileException;
 import java.time.Instant;
 
 /**
@@ -63,8 +60,11 @@ public record SetInfoHandler(Connection connection) {
 				return ErrorResponse.create(request, status);
 			}
 		} catch (IOException e) {
-			LOG.warn("SET_INFO fileId={} class=0x{} failed", open.fileId, Integer.toHexString(request.fileInfoClass()), e);
-			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
+			int status = NTStatus.of(e);
+			if (status == NTStatus.STATUS_UNEXPECTED_IO_ERROR) {
+				LOG.warn("SET_INFO fileId={} class=0x{} failed", open.fileId, Integer.toHexString(request.fileInfoClass()), e);
+			}
+			return ErrorResponse.create(request, status);
 		}
 
 		var header = buildResponseHeader(request);
@@ -158,15 +158,7 @@ public record SetInfoHandler(Connection connection) {
 		while (newPath.startsWith("/")) {
 			newPath = newPath.substring(1);
 		}
-		try {
-			open.backend.rename(newPath, replaceIfExists);
-		} catch (NoSuchFileException e) {
-			return NTStatus.STATUS_OBJECT_NAME_NOT_FOUND;
-		} catch (FileAlreadyExistsException e) {
-			return NTStatus.STATUS_OBJECT_NAME_COLLISION;
-		} catch (AccessDeniedException e) {
-			return NTStatus.STATUS_ACCESS_DENIED;
-		}
+		open.backend.rename(newPath, replaceIfExists); // a failure is mapped to its status by the caller
 		open.path = newPath; // name and ID queries on this handle are answered from it
 		LOG.debug("SET_INFO fileId={} renamed to '{}' (replace={})", open.fileId, newPath, replaceIfExists);
 		return NTStatus.STATUS_SUCCESS;

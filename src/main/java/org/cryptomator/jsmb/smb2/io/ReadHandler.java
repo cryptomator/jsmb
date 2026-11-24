@@ -49,8 +49,11 @@ public record ReadHandler(Connection connection) {
 		try {
 			bytesRead = file.read(ByteBuffer.wrap(buffer), request.offset());
 		} catch (IOException e) {
-			LOG.warn("READ fileId={} offset={} length={} failed", open.fileId, request.offset(), requested, e);
-			return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
+			int status = NTStatus.of(e);
+			if (status == NTStatus.STATUS_UNEXPECTED_IO_ERROR) {
+				LOG.warn("READ fileId={} offset={} length={} failed", open.fileId, request.offset(), requested, e);
+			}
+			return ErrorResponse.create(request, status);
 		}
 
 		if (bytesRead < 0) {

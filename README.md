@@ -58,7 +58,7 @@ SMB2 messages are **not** deserialised into POJOs. Records like `PacketHeader`, 
 
 ### Backend SPI (`org.cryptomator.jsmb.share`)
 
-Embedders plug a filesystem-like backend in via the `SmbShare` / `SmbOpen` interfaces, with value records `FileBasicInfo`, `FileStandardInfo`, `DirEntry`, `FsAttributes`, `FsSize`, and `OpenParams` (with a `Disposition` enum that mirrors MS-SMB2 2.2.13's `CreateDisposition`). The SPI talks about paths, bytes, and basic metadata only — it doesn't leak SMB concepts. SMB2 command handlers translate NT access masks / share modes / dispositions / options into SPI calls and map `java.nio.file` exceptions (`NoSuchFileException`, `FileAlreadyExistsException`, `AccessDeniedException`, generic `IOException`) to the appropriate `STATUS_*` codes.
+Embedders plug a filesystem-like backend in via the `SmbShare` / `SmbOpen` interfaces, with value records `FileBasicInfo`, `FileStandardInfo`, `DirEntry`, `FsAttributes`, `FsSize`, and `OpenParams` (with a `Disposition` enum that mirrors MS-SMB2 2.2.13's `CreateDisposition`). The SPI talks about paths, bytes, and basic metadata only — it doesn't leak SMB concepts. SMB2 command handlers translate NT access masks / share modes / dispositions / options into SPI calls and map the `IOException` of any SPI method to a `STATUS_*` code through `NTStatus.of(IOException)`: `java.nio.file` exceptions (`NoSuchFileException`, `FileAlreadyExistsException`, `AccessDeniedException`, `NotDirectoryException`, `DirectoryNotEmptyException`) have a status of their own, a generic `IOException` becomes `STATUS_UNEXPECTED_IO_ERROR`, and a backend that needs to report anything else (sharing violation, disk full, …) throws `share.IOExceptionWithStatus`.
 
 ### Negotiate contexts
 

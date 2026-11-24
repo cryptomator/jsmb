@@ -2,8 +2,10 @@ package org.cryptomator.jsmb.share;
 
 import java.io.IOException;
 import java.nio.file.AccessDeniedException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.NotDirectoryException;
 
 /**
  * A filesystem-like backend that an embedder registers with {@code TcpServer.registerShare(name, share)}
@@ -14,11 +16,15 @@ import java.nio.file.NoSuchFileException;
  * The root itself is the empty string {@code ""} or {@code "/"}. Separator translation from SMB's
  * backslash form is the caller's concern.
  *
- * <p>Exceptions thrown by {@link #open} are mapped to NT status codes by the SMB2 command handler:
+ * <p>An {@link IOException} thrown by any method of this SPI, i.e. of this interface, {@link SmbOpen}, {@link SmbFile}
+ * and {@link SmbDirectory}, fails the request with an NT status code that depends on the exception's type:
  * <ul>
+ *   <li>{@link IOExceptionWithStatus} → the status it carries, for anything the following don't cover (sharing violation, disk full, …)</li>
  *   <li>{@link NoSuchFileException} → {@code STATUS_OBJECT_NAME_NOT_FOUND}</li>
  *   <li>{@link FileAlreadyExistsException} → {@code STATUS_OBJECT_NAME_COLLISION}</li>
  *   <li>{@link AccessDeniedException} → {@code STATUS_ACCESS_DENIED}</li>
+ *   <li>{@link NotDirectoryException} → {@code STATUS_NOT_A_DIRECTORY}</li>
+ *   <li>{@link DirectoryNotEmptyException} → {@code STATUS_DIRECTORY_NOT_EMPTY}</li>
  *   <li>any other {@link IOException} → {@code STATUS_UNEXPECTED_IO_ERROR}</li>
  * </ul>
  */

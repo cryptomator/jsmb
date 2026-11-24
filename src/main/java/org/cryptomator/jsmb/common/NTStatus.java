@@ -1,5 +1,14 @@
 package org.cryptomator.jsmb.common;
 
+import org.cryptomator.jsmb.share.IOExceptionWithStatus;
+
+import java.io.IOException;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.DirectoryNotEmptyException;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.NotDirectoryException;
+
 /**
  * Collection of NT status codes.
  *
@@ -33,4 +42,28 @@ public interface NTStatus {
 	int STATUS_BUFFER_OVERFLOW = 0x80000005; // a warning rather than an error: the response carries as much data as fits
 	int STATUS_NO_MORE_FILES = 0x80000006;
 	int STATUS_NO_SUCH_FILE = 0xC000000F;
+	int STATUS_SHARING_VIOLATION = 0xC0000043;
+	int STATUS_DISK_FULL = 0xC000007F;
+	int STATUS_FILE_IS_A_DIRECTORY = 0xC00000BA;
+	int STATUS_DIRECTORY_NOT_EMPTY = 0xC0000101;
+	int STATUS_NOT_A_DIRECTORY = 0xC0000103;
+
+	/**
+	 * Maps a failure reported by a share backend to the status to fail the request with.
+	 *
+	 * @param e the exception thrown by the backend
+	 * @return the NTSTATUS value, which is {@link #STATUS_UNEXPECTED_IO_ERROR} for an exception of an unknown kind
+	 * @see org.cryptomator.jsmb.share.SmbShare
+	 */
+	static int of(IOException e) {
+		return switch (e) {
+			case IOExceptionWithStatus withStatus -> withStatus.status().ntStatus();
+			case NoSuchFileException _ -> STATUS_OBJECT_NAME_NOT_FOUND;
+			case FileAlreadyExistsException _ -> STATUS_OBJECT_NAME_COLLISION;
+			case AccessDeniedException _ -> STATUS_ACCESS_DENIED;
+			case NotDirectoryException _ -> STATUS_NOT_A_DIRECTORY;
+			case DirectoryNotEmptyException _ -> STATUS_DIRECTORY_NOT_EMPTY;
+			default -> STATUS_UNEXPECTED_IO_ERROR;
+		};
+	}
 }

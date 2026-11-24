@@ -62,8 +62,11 @@ public record QueryDirectoryHandler(Connection connection) {
 			try (var stream = directory.listChildren(pattern.isEmpty() ? null : pattern)) {
 				open.directoryEntries = stream.toList();
 			} catch (IOException e) {
-				LOG.warn("QUERY_DIRECTORY listing failed", e);
-				return ErrorResponse.create(request, NTStatus.STATUS_UNEXPECTED_IO_ERROR);
+				int status = NTStatus.of(e);
+				if (status == NTStatus.STATUS_UNEXPECTED_IO_ERROR) {
+					LOG.warn("QUERY_DIRECTORY listing failed", e);
+				}
+				return ErrorResponse.create(request, status);
 			}
 			open.nextDirectoryIndex = 0;
 		}
