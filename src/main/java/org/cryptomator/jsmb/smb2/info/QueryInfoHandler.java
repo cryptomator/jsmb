@@ -39,6 +39,10 @@ public record QueryInfoHandler(Server server, Connection connection) {
 		if (open == null) {
 			return ErrorResponse.create(request, NTStatus.STATUS_FILE_CLOSED);
 		}
+		// MS-SMB2 3.3.5.20: "If OutputBufferLength is greater than Connection.MaxTransactSize, the server SHOULD fail the request with STATUS_INVALID_PARAMETER."
+		if (Integer.toUnsignedLong(request.outputBufferLength()) > connection.maxTransactSize) {
+			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
+		}
 
 		try {
 			byte[] output = switch (request.infoType()) {

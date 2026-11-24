@@ -39,6 +39,11 @@ public record QueryDirectoryHandler(Connection connection) {
 			// QUERY_DIRECTORY on a file handle — MS-SMB2 3.3.5.18 has the server reject this.
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
 		}
+		// MS-SMB2 3.3.5.18: "If OutputBufferLength is greater than Connection.MaxTransactSize, the server SHOULD fail the request with STATUS_INVALID_PARAMETER."
+		// This also keeps the client from dictating how much memory gets allocated for the response.
+		if (Integer.toUnsignedLong(request.outputBufferLength()) > connection.maxTransactSize) {
+			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
+		}
 
 		FileInformationClass cls;
 		try {
@@ -64,7 +69,8 @@ public record QueryDirectoryHandler(Connection connection) {
 		}
 
 		if (request.hasFlag(QueryDirectoryRequest.FLAG_INDEX_SPECIFIED)) {
-			open.nextDirectoryIndex = request.fileIndex();
+			// FileIndex is an unsigned number chosen by the client. One beyond the listing ends the enumeration.
+			open.nextDirectoryIndex = (int) Math.min(Integer.toUnsignedLong(request.fileIndex()), open.directoryEntries.size());
 		}
 
 		var entries = open.directoryEntries;

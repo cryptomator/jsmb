@@ -20,6 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -94,6 +96,32 @@ class QueryDirectoryHandlerTest {
 
 		Assertions.assertInstanceOf(ErrorResponse.class, second);
 		Assertions.assertEquals(NTStatus.STATUS_NO_MORE_FILES, second.header().status());
+	}
+
+	@ParameterizedTest(name = "OutputBufferLength = {0}")
+	@DisplayName("OutputBufferLength beyond MaxTransactSize returns STATUS_INVALID_PARAMETER")
+	@ValueSource(ints = {(1 << 20) + 1, -1}) // -1 is 4 GiB - 1 when read as the unsigned number that it is
+	void outputBufferBeyondMaxTransactSize(int outputBufferLength) {
+		var response = handler.query(buildRequest(rootOpen.fileId,
+				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
+				QueryDirectoryRequest.FLAG_RESTART_SCAN, "*", outputBufferLength));
+
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+	}
+
+	@ParameterizedTest(name = "FileIndex = {0}")
+	@DisplayName("A FileIndex beyond the listing returns STATUS_NO_MORE_FILES")
+	@ValueSource(ints = {1000, -1}) // -1 is 4 billion and something when read as the unsigned number that it is
+	void fileIndexBeyondListing(int fileIndex) throws IOException {
+		Files.createFile(shareRoot.resolve("one.txt"));
+		var request = buildRequest(rootOpen.fileId,
+				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
+				(byte) (QueryDirectoryRequest.FLAG_RESTART_SCAN | QueryDirectoryRequest.FLAG_INDEX_SPECIFIED), "*", 65536);
+		request.segment().set(Layouts.LE_INT32, 4, fileIndex);
+
+		var response = handler.query(request);
+
+		Assertions.assertEquals(NTStatus.STATUS_NO_MORE_FILES, response.header().status());
 	}
 
 	@Test

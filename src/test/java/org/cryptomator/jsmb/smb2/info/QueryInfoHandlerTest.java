@@ -20,6 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -187,6 +189,18 @@ class QueryInfoHandlerTest {
 
 		Assertions.assertInstanceOf(ErrorResponse.class, response);
 		Assertions.assertEquals(NTStatus.STATUS_FILE_CLOSED, response.header().status());
+	}
+
+	@ParameterizedTest(name = "OutputBufferLength = {0}")
+	@DisplayName("OutputBufferLength beyond MaxTransactSize returns STATUS_INVALID_PARAMETER")
+	@ValueSource(ints = {(1 << 20) + 1, -1}) // -1 is 4 GiB - 1 when read as the unsigned number that it is
+	void outputBufferBeyondMaxTransactSize(int outputBufferLength) {
+		var response = handler.query(buildRequest(
+				QueryInfoRequest.INFO_TYPE_FILE,
+				(byte) FileInfoClass.FILE_BASIC_INFORMATION.value(),
+				fileOpen.fileId, outputBufferLength));
+
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
 	}
 
 	@Test
