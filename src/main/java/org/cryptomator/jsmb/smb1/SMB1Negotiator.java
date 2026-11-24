@@ -58,8 +58,9 @@ public record SMB1Negotiator(Server server, Connection connection) {
 			connection.negotiateDialect = Dialects.SMB2_WILDCARD;
 			return response;
 		} else {
-			LOG.warn("Attempted to connect with dialects: {}", String.join("; ", request.dialects()));
-			return SmbComNegotiateResponse.unsupportedDialectResponse();
+			// MS-SMB2 3.3.5.3.2: without an SMB2 dialect in the list, a server that doesn't implement SMB1 "MUST disconnect the connection [...] without sending a response".
+			// "SMB 2.002" alone doesn't help either, as dialect 2.0.2 is not implemented.
+			throw new DisconnectException("SMB_COM_NEGOTIATE without the \"SMB 2.???\" dialect, offering: " + String.join("; ", request.dialects()));
 		}
 	}
 }

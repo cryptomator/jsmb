@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/4d330f4c-151c-4d79-b207-40bd4f754da9">SMB1 Message Structure</a>
  */
-public sealed interface SMB1Message extends SMBMessage permits SmbComNegotiateRequest, SmbComNegotiateResponse {
+public sealed interface SMB1Message extends SMBMessage permits SmbComNegotiateRequest {
 
 	int PROTOCOL_ID = 0x424D53FF; // 0xFF S M B
 

@@ -50,6 +50,14 @@ class SMB1NegotiatorTest {
 		Assertions.assertEquals(Dialects.SMB2_WILDCARD, connection.negotiateDialect);
 	}
 
+	@Test
+	@DisplayName("A negotiate that doesn't offer \"SMB 2.???\" drops the connection")
+	void negotiateWithoutSmb2Wildcard() {
+		var request = negotiateRequest("NT LM 0.12", "SMB 2.002");
+
+		Assertions.assertThrows(DisconnectException.class, () -> negotiator.negotiate(request));
+	}
+
 	@ParameterizedTest(name = "NegotiateDialect 0x{0}")
 	@DisplayName("SMB_COM_NEGOTIATE on a connection that has already been negotiated drops the connection")
 	@ValueSource(strings = {"02ff", "0311"})
