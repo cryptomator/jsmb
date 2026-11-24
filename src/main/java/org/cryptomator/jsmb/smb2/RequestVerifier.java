@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb.smb2;
 
+import org.cryptomator.jsmb.common.DisconnectException;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.smb2.crypto.MessageSigner;
 import org.cryptomator.jsmb.smb2.io.ReadRequest;
@@ -29,6 +30,29 @@ public class RequestVerifier {
 
 	public RequestVerifier(Connection connection) {
 		this.connection = connection;
+	}
+
+	/**
+	 * Checks a request that arrived encrypted against the transform that carried it.
+	 *
+	 * @param request            a request found in the decrypted message, as received
+	 * @param offset             the position of the request within the decrypted message, which is 0 unless it is a later element of a compounded request
+	 * @param transformSessionId the SessionId of the SMB2 TRANSFORM_HEADER
+	 * @throws DisconnectException if the request must not appear in this transform, which requires dropping the connection
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/94398d18-48ff-4b6c-a32d-0154b2e88238">Decrypting the Message</a>
+	 */
+	public void verifyTransformed(SMB2Message request, int offset, long transformSessionId) throws DisconnectException {
+		boolean related = request.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS);
+		if (offset == 0 && related) {
+			throw new DisconnectException("First request of an encrypted message is flagged as related operation");
+		}
+		// a related operation is processed with the SessionId of the one before it, whatever its own header says
+		if (!related && request.header().sessionId() != transformSessionId) {
+			throw new DisconnectException("Encrypted request for a session other than the one that encrypted it");
+		}
+		if (offset % 8 != 0) {
+			throw new DisconnectException("Request within an encrypted compound doesn't start at an 8-byte boundary");
+		}
 	}
 
 	/**
@@ -101,7 +125,8 @@ public class RequestVerifier {
 		if (session.state != Session.State.VALID && !Command.isAnyOf(command, Command.LOGOFF, Command.CLOSE, Command.LOCK)) {
 			return OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED);
 		}
-		// Not covered by the spec: a request wrapped in the transform of a different session. Its own session's keys never authenticated it.
+		// A request wrapped in the transform of a different session, which its own session's keys never authenticated.
+		// verifyTransformed() drops the connection for this already; this is for callers that don't go through it.
 		if (transformSessionId != null && !encrypted) {
 			return OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED);
 		}

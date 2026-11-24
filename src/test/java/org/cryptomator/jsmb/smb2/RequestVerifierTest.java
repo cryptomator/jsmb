@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
+import org.cryptomator.jsmb.common.DisconnectException;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.smb2.io.ReadRequest;
 import org.cryptomator.jsmb.util.Layouts;
@@ -276,6 +277,53 @@ class RequestVerifierTest {
 			var rejection = verify(request, otherSession.sessionId);
 
 			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED), rejection);
+		}
+	}
+
+	@Nested
+	@DisplayName("Requests within a transform")
+	class Transformed {
+
+		private static final long TRANSFORM_SESSION_ID = 0x42L;
+
+		@Test
+		@DisplayName("A request for the session that encrypted it passes")
+		void sameSession() {
+			var request = request(Command.CREATE, TRANSFORM_SESSION_ID);
+
+			Assertions.assertDoesNotThrow(() -> verifier.verifyTransformed(request, 0, TRANSFORM_SESSION_ID));
+		}
+
+		@Test
+		@DisplayName("A request for another session than the one that encrypted it drops the connection")
+		void otherSession() {
+			var request = request(Command.CREATE, TRANSFORM_SESSION_ID + 1);
+
+			Assertions.assertThrows(DisconnectException.class, () -> verifier.verifyTransformed(request, 0, TRANSFORM_SESSION_ID));
+		}
+
+		@Test
+		@DisplayName("A related operation passes whatever its SessionId, as it gets processed with that of the operation before it")
+		void relatedOperation() {
+			var request = request(Command.CLOSE, -1L, SMB2Message.Flags.RELATED_OPERATIONS);
+
+			Assertions.assertDoesNotThrow(() -> verifier.verifyTransformed(request, 128, TRANSFORM_SESSION_ID));
+		}
+
+		@Test
+		@DisplayName("A first request flagged as related operation drops the connection")
+		void relatedFirstOperation() {
+			var request = request(Command.CLOSE, TRANSFORM_SESSION_ID, SMB2Message.Flags.RELATED_OPERATIONS);
+
+			Assertions.assertThrows(DisconnectException.class, () -> verifier.verifyTransformed(request, 0, TRANSFORM_SESSION_ID));
+		}
+
+		@Test
+		@DisplayName("A compounded request that doesn't start at an 8-byte boundary drops the connection")
+		void unalignedRequest() {
+			var request = request(Command.CLOSE, TRANSFORM_SESSION_ID);
+
+			Assertions.assertThrows(DisconnectException.class, () -> verifier.verifyTransformed(request, 132, TRANSFORM_SESSION_ID));
 		}
 	}
 

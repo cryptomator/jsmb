@@ -33,6 +33,7 @@ import org.cryptomator.jsmb.smb2.echo.EchoRequest;
 import org.cryptomator.jsmb.smb2.notify.ChangeNotifyRequest;
 import org.cryptomator.jsmb.smb2.crypto.MessageEncryptor;
 import org.cryptomator.jsmb.smb2.crypto.TransformHeader;
+import org.cryptomator.jsmb.smb2.negotiate.EncryptionCapabilities;
 import org.cryptomator.jsmb.smb2.info.QueryInfoHandler;
 import org.cryptomator.jsmb.smb2.info.QueryInfoRequest;
 import org.cryptomator.jsmb.smb2.info.SetInfoHandler;
@@ -168,10 +169,18 @@ class TcpConnection implements Runnable {
 	}
 
 	private MemorySegment decryptTransform(MemorySegment segment) throws MalformedMessageException, AEADBadTagException {
+		// Decrypting the Message: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/94398d18-48ff-4b6c-a32d-0154b2e88238
 		var header = new TransformHeader(segment.asSlice(0, TransformHeader.STRUCTURE_SIZE));
+		if (connection.cipherId == EncryptionCapabilities.NO_COMMON_CIPHER) {
+			throw new DisconnectException("Encrypted message on a connection that hasn't negotiated a cipher");
+		}
+		if (header.flags() != TransformHeader.FLAG_ENCRYPTED) {
+			throw new DisconnectException("Unsupported Flags/EncryptionAlgorithm in TRANSFORM_HEADER: " + (int) header.flags());
+		}
 		var session = connection.sessionTable.get(header.sessionId());
-		if (session == null) {
-			throw new MalformedMessageException("Encrypted request for unknown session " + header.sessionId());
+		if (session == null || session.decryptionKey == null) {
+			// decryptionKey is null as long as the session hasn't completed authentication
+			throw new DisconnectException("Encrypted message for unknown or unauthenticated session " + header.sessionId());
 		}
 		byte[] plaintext = encryptor.decrypt(segment, session.decryptionKey);
 		return MemorySegment.ofArray(plaintext);
@@ -206,6 +215,9 @@ class TcpConnection implements Runnable {
 			// Verifying the Connection State: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/4daf7dce-9f49-4413-99bf-323801c9283d
 			if (!(msg instanceof NegotiateRequest) && (connection.negotiateDialect == Dialects.NONE || connection.negotiateDialect == Dialects.SMB2_WILDCARD)) {
 				throw new DisconnectException("Request on a connection that hasn't negotiated a dialect yet");
+			}
+			if (transformSessionId != null) {
+				requestVerifier.verifyTransformed(msg, offset, transformSessionId);
 			}
 			// Verifying the Sequence Number: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/0326f784-0baf-45fd-9687-626859ef5a9b
 			// CANCEL carries the MessageId of the request it cancels and consumes none itself.
