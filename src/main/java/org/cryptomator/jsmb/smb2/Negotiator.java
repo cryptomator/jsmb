@@ -4,6 +4,7 @@ import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.asn1.NegTokenInit2;
 import org.cryptomator.jsmb.asn1.NegTokenResp;
 import org.cryptomator.jsmb.asn1.NegotiationToken;
+import org.cryptomator.jsmb.common.DisconnectException;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.common.NTStatusException;
 import org.cryptomator.jsmb.ntlmv2.NtlmSession;
@@ -46,9 +47,9 @@ public record Negotiator(Server server, Connection connection) {
 	private static final Logger LOG = LoggerFactory.getLogger(Negotiator.class);
 
 	public SMB2Message negotiate(NegotiateRequest request) {
-		if (connection.negotiateDialect != 0xFFFF) {
-			// TODO disconnect without replying as per spec
-			throw new UnsupportedOperationException("Disconnect not yet implemented");
+		// A second NEGOTIATE is only legitimate as the follow-up to the wildcard response of a multi-protocol negotiate.
+		if (connection.negotiateDialect != Dialects.NONE && connection.negotiateDialect != Dialects.SMB2_WILDCARD) {
+			throw new DisconnectException("NEGOTIATE on a connection that has already negotiated a dialect");
 		}
 		if (request.dialectCount() == 0) {
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);

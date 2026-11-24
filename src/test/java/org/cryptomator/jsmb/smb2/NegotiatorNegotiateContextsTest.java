@@ -3,6 +3,7 @@ package org.cryptomator.jsmb.smb2;
 import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.Server;
+import org.cryptomator.jsmb.common.DisconnectException;
 import org.cryptomator.jsmb.smb2.negotiate.CompressionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.EncryptionCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.NegotiateContext;
@@ -85,6 +86,28 @@ class NegotiatorNegotiateContextsTest {
 		// And the count on the wire must match.
 		Assertions.assertEquals(3, responseContextTypes.size(),
 				"expected exactly 3 contexts in the response (Preauth, Encryption, Signing); got " + responseContextTypes);
+	}
+
+	@Test
+	@DisplayName("A second NEGOTIATE on a connection that has negotiated a dialect drops the connection")
+	void secondNegotiate() {
+		var contexts = List.<NegotiateContext>of(PreauthIntegrityCapabilities.build(PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512, new byte[32]));
+		negotiator.negotiate(buildNegotiateRequest(contexts));
+		var request = buildNegotiateRequest(contexts);
+
+		Assertions.assertThrows(DisconnectException.class, () -> negotiator.negotiate(request));
+	}
+
+	@Test
+	@DisplayName("NEGOTIATE is accepted after the wildcard response of a multi-protocol negotiate")
+	void negotiateAfterWildcard() {
+		negotiator.connection().negotiateDialect = Dialects.SMB2_WILDCARD;
+		var request = buildNegotiateRequest(List.of(PreauthIntegrityCapabilities.build(PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512, new byte[32])));
+
+		var response = negotiator.negotiate(request);
+
+		Assertions.assertInstanceOf(NegotiateResponse.class, response);
+		Assertions.assertEquals(Dialects.SMB3_1_1, negotiator.connection().negotiateDialect);
 	}
 
 	/** Pulls the {@code ContextType} of every negotiate context from a NegotiateResponse. */

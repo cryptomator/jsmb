@@ -1,6 +1,7 @@
 package org.cryptomator.jsmb.smb1;
 
 import org.cryptomator.jsmb.Server;
+import org.cryptomator.jsmb.common.DisconnectException;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.common.SMBMessage;
 import org.cryptomator.jsmb.smb2.Command;
@@ -28,8 +29,8 @@ public record SMB1Negotiator(Server server, Connection connection) {
 	private static final Logger LOG = LoggerFactory.getLogger(SMB1Negotiator.class);
 
 	public SMBMessage negotiate(SmbComNegotiateRequest request) {
-		if (connection.negotiateDialect != 0xFFFF) {
-			// TODO disconnect without replying as per spec
+		if (connection.negotiateDialect != Dialects.NONE) {
+			throw new DisconnectException("SMB_COM_NEGOTIATE on a connection that has already been negotiated");
 		}
 		if (request.dialects().contains("SMB 2.???")) {
 			LOG.info("SMB1: Upgrading to SMB2...");
@@ -54,6 +55,7 @@ public record SMB1Negotiator(Server server, Connection connection) {
 			response.maxWriteSize(connection.maxWriteSize);
 			response.systemTime(WinFileTime.now());
 			response.serverStartTime(0);
+			connection.negotiateDialect = Dialects.SMB2_WILDCARD;
 			return response;
 		} else {
 			LOG.warn("Attempted to connect with dialects: {}", String.join("; ", request.dialects()));

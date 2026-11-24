@@ -7,4 +7,5 @@ public interface Dialects {
 	char SMB3_0 = 0x0300;
 	char SMB3_0_2 = 0x0302;
 	char SMB3_1_1 = 0x0311;
+	char NONE = 0xFFFF; // initial value of Connection.NegotiateDialect: nothing negotiated yet
 }

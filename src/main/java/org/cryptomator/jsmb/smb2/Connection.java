@@ -25,7 +25,7 @@ public class Connection {
 	public UUID clientGuid;
 	public char[] clientDialects;
 	public boolean shouldSign;
-	public char negotiateDialect = (char) 0xFFFF;
+	public char negotiateDialect = Dialects.NONE;
 	public String dialect;
 	public int serverCapabilities;
 	public int maxWriteSize = 1 << 20; // 1MiB

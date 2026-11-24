@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb;
 
+import org.cryptomator.jsmb.common.DisconnectException;
 import org.cryptomator.jsmb.common.MalformedMessageException;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -9,6 +10,7 @@ import org.cryptomator.jsmb.smb1.SmbComNegotiateRequest;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.CompoundChain;
 import org.cryptomator.jsmb.smb2.Connection;
+import org.cryptomator.jsmb.smb2.Dialects;
 import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.smb2.FileIdCarrying;
 import org.cryptomator.jsmb.smb2.LogoffRequest;
@@ -146,6 +148,8 @@ class TcpConnection implements Runnable {
 			}
 		} catch (EOFException e) {
 			LOG.debug("Connection closed");
+		} catch (DisconnectException e) {
+			LOG.warn("Disconnecting client: {}", e.getMessage());
 		} catch (MalformedMessageException | IOException | AEADBadTagException e) {
 			LOG.error("Exception while reading packet", e);
 		}
@@ -186,6 +190,10 @@ class TcpConnection implements Runnable {
 		FileId chainedFileId = null;
 		do {
 			var msg = SMB2MessageParser.parse(segment.asSlice(offset));
+			// Verifying the Connection State: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/4daf7dce-9f49-4413-99bf-323801c9283d
+			if (!(msg instanceof NegotiateRequest) && (connection.negotiateDialect == Dialects.NONE || connection.negotiateDialect == Dialects.SMB2_WILDCARD)) {
+				throw new DisconnectException("Request on a connection that hasn't negotiated a dialect yet");
+			}
 			var sessionId = chain.sessionId(msg);
 			var treeId = chain.treeId(msg);
 			var rejection = requestVerifier.verify(msg, sessionId, treeId, transformSessionId);

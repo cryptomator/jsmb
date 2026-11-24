@@ -47,31 +47,36 @@ public class SMB2MessageParser {
 			segment = segment.asSlice(0, nextCommand);
 		}
 		var bodySegment = segment.asSlice(PacketHeader.STRUCTURE_SIZE);
+		return switch (commandOf(header)) {
+			case NEGOTIATE -> new NegotiateRequest(header, bodySegment);
+			case SESSION_SETUP -> new SessionSetupRequest(header, bodySegment);
+			case LOGOFF -> new LogoffRequest(header, bodySegment);
+			case IOCTL -> new IoctlRequest(header, bodySegment);
+			case TREE_CONNECT -> new TreeConnectRequest(header, bodySegment);
+			case TREE_DISCONNECT -> new TreeDisconnectRequest(header, bodySegment);
+			case CREATE -> new CreateRequest(header, bodySegment);
+			case CLOSE -> new CloseRequest(header, bodySegment);
+			case QUERY_DIRECTORY -> new QueryDirectoryRequest(header, bodySegment);
+			case QUERY_INFO -> new QueryInfoRequest(header, bodySegment);
+			case SET_INFO -> new SetInfoRequest(header, bodySegment);
+			case READ -> new ReadRequest(header, bodySegment);
+			case WRITE -> new WriteRequest(header, bodySegment);
+			case FLUSH -> new FlushRequest(header, bodySegment);
+			case ECHO -> new EchoRequest(header, bodySegment);
+			case CANCEL -> new CancelRequest(header, bodySegment);
+			case CHANGE_NOTIFY -> new ChangeNotifyRequest(header, bodySegment);
+			// valid commands that aren't implemented, which the dispatcher answers with STATUS_NOT_SUPPORTED
+			default -> new UnhandledRequest(header, bodySegment);
+		};
+	}
+
+	// A command code that isn't defined by the protocol requires disconnecting without a response, which is how the caller treats a MalformedMessageException.
+	// See https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/853e5234-d5d6-4a18-a2f5-1c792e562947
+	private static Command commandOf(PacketHeader header) {
 		try {
-			return switch (Command.valueOf(header.command())) {
-				case NEGOTIATE -> new NegotiateRequest(header, bodySegment);
-				case SESSION_SETUP -> new SessionSetupRequest(header, bodySegment);
-				case LOGOFF -> new LogoffRequest(header, bodySegment);
-				case IOCTL -> new IoctlRequest(header, bodySegment);
-				case TREE_CONNECT -> new TreeConnectRequest(header, bodySegment);
-				case TREE_DISCONNECT -> new TreeDisconnectRequest(header, bodySegment);
-				case CREATE -> new CreateRequest(header, bodySegment);
-				case CLOSE -> new CloseRequest(header, bodySegment);
-				case QUERY_DIRECTORY -> new QueryDirectoryRequest(header, bodySegment);
-				case QUERY_INFO -> new QueryInfoRequest(header, bodySegment);
-				case SET_INFO -> new SetInfoRequest(header, bodySegment);
-				case READ -> new ReadRequest(header, bodySegment);
-				case WRITE -> new WriteRequest(header, bodySegment);
-				case FLUSH -> new FlushRequest(header, bodySegment);
-				case ECHO -> new EchoRequest(header, bodySegment);
-				case CANCEL -> new CancelRequest(header, bodySegment);
-				case CHANGE_NOTIFY -> new ChangeNotifyRequest(header, bodySegment);
-				default -> new UnhandledRequest(header, bodySegment);
-			};
+			return Command.valueOf(header.command());
 		} catch (IllegalArgumentException e) {
-			// Command.valueOf throws for an entirely unknown opcode — treat the same as unhandled so
-			// the dispatcher can respond with STATUS_NOT_SUPPORTED instead of killing the connection.
-			return new UnhandledRequest(header, bodySegment);
+			throw new MalformedMessageException("Unknown command: 0x" + Integer.toHexString(header.command()));
 		}
 	}
 }
