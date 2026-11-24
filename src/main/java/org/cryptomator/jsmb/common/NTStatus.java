@@ -30,6 +30,7 @@ public interface NTStatus {
 	int STATUS_OBJECT_NAME_COLLISION = 0xC0000035;
 	int STATUS_INVALID_INFO_CLASS = 0xC0000003;
 	int STATUS_INFO_LENGTH_MISMATCH = 0xC0000004;
+	int STATUS_BUFFER_OVERFLOW = 0x80000005; // a warning rather than an error: the response carries as much data as fits
 	int STATUS_NO_MORE_FILES = 0x80000006;
 	int STATUS_NO_SUCH_FILE = 0xC000000F;
 }

@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * Handles {@code QUERY_INFO} for SMB 3.1.1. Dispatches on {@code InfoType}:
@@ -45,21 +46,27 @@ public record QueryInfoHandler(Server server, Connection connection) {
 		}
 
 		try {
-			byte[] output = switch (request.infoType()) {
+			Info info = switch (request.infoType()) {
 				case QueryInfoRequest.INFO_TYPE_FILE -> writeFileInfo(open, request);
 				case QueryInfoRequest.INFO_TYPE_FILESYSTEM -> writeFsInfo(open, request);
 				case QueryInfoRequest.INFO_TYPE_SECURITY, QueryInfoRequest.INFO_TYPE_QUOTA -> null;
 				default -> null;
 			};
-			if (output == null) {
+			if (info == null) {
 				return ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
 			}
-			if (output.length > request.outputBufferLength()) {
+			// MS-SMB2 3.3.5.20.1 and 3.3.5.20.2: the fixed part has to fit, or else there is nothing useful to return.
+			// Variable-length data that doesn't fit gets cut off, which the client learns from STATUS_BUFFER_OVERFLOW. The length fields within the data still state the full size.
+			int outputBufferLength = request.outputBufferLength(); // not beyond MaxTransactSize, hence positive
+			if (outputBufferLength == 0 || outputBufferLength < info.fixedPartSize()) {
 				return ErrorResponse.create(request, NTStatus.STATUS_INFO_LENGTH_MISMATCH);
 			}
-
-			var header = buildResponseHeader(request);
-			return new QueryInfoResponse(header).withOutputBuffer(output);
+			if (info.data().length > outputBufferLength) {
+				var header = buildResponseHeader(request, NTStatus.STATUS_BUFFER_OVERFLOW);
+				return new QueryInfoResponse(header).withOutputBuffer(Arrays.copyOf(info.data(), outputBufferLength));
+			}
+			var header = buildResponseHeader(request, NTStatus.STATUS_SUCCESS);
+			return new QueryInfoResponse(header).withOutputBuffer(info.data());
 		} catch (UnsupportedInfoClassException e) {
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_INFO_CLASS);
 		} catch (IOException e) {
@@ -68,7 +75,11 @@ public record QueryInfoHandler(Server server, Connection connection) {
 		}
 	}
 
-	private byte[] writeFileInfo(Open open, QueryInfoRequest request) throws UnsupportedInfoClassException, IOException {
+	// the requested information and how many of its leading bytes are the fixed part
+	private record Info(byte[] data, int fixedPartSize) {
+	}
+
+	private Info writeFileInfo(Open open, QueryInfoRequest request) throws UnsupportedInfoClassException, IOException {
 		FileInfoClass cls;
 		try {
 			cls = FileInfoClass.fromValue(request.fileInfoClass());
@@ -78,10 +89,11 @@ public record QueryInfoHandler(Server server, Connection connection) {
 		}
 		FileBasicInfo basic = open.backend.queryBasic();
 		FileStandardInfo standard = open.backend.queryStandard();
-		return FileInfoWriter.write(cls, open.path, basic, standard);
+		byte[] data = FileInfoWriter.write(cls, open.path, basic, standard);
+		return new Info(data, cls.fixedPartSize(data.length));
 	}
 
-	private byte[] writeFsInfo(Open open, QueryInfoRequest request) throws UnsupportedInfoClassException, IOException {
+	private Info writeFsInfo(Open open, QueryInfoRequest request) throws UnsupportedInfoClassException, IOException {
 		FsInfoClass cls;
 		try {
 			cls = FsInfoClass.fromValue(request.fileInfoClass());
@@ -96,10 +108,11 @@ public record QueryInfoHandler(Server server, Connection connection) {
 		}
 		var size = share.fsSize();
 		var attrs = share.fsAttributes();
-		return FsInfoWriter.write(cls, size, attrs, open.treeConnect.shareName(), WinFileTime.fromInstant(server.startTime));
+		byte[] data = FsInfoWriter.write(cls, size, attrs, open.treeConnect.shareName(), WinFileTime.fromInstant(server.startTime));
+		return new Info(data, cls.fixedPartSize(data.length));
 	}
 
-	private PacketHeader buildResponseHeader(QueryInfoRequest request) {
+	private PacketHeader buildResponseHeader(QueryInfoRequest request, int status) {
 		var header = PacketHeader.builder();
 		header.command(Command.QUERY_INFO.value());
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
@@ -107,7 +120,7 @@ public record QueryInfoHandler(Server server, Connection connection) {
 		header.messageId(request.header().messageId());
 		header.treeId(request.header().treeId());
 		header.sessionId(request.header().sessionId());
-		header.status(NTStatus.STATUS_SUCCESS);
+		header.status(status);
 		return header.build();
 	}
 

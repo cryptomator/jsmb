@@ -21,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -201,6 +202,52 @@ class QueryInfoHandlerTest {
 				fileOpen.fileId, outputBufferLength));
 
 		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+	}
+
+	@ParameterizedTest(name = "InfoType {0}, class {1}, OutputBufferLength {2}")
+	@DisplayName("A buffer that holds the fixed part but not all of the variable-length data gets filled up and STATUS_BUFFER_OVERFLOW")
+	@CsvSource(textBlock = """
+			1,  9,   4
+			1,  9,  10
+			1, 18, 100
+			2,  1,  18
+			2,  5,  12
+			""") // FileNameInformation, FileAllInformation, FileFsVolumeInformation, FileFsAttributeInformation
+	void variablePartTruncated(byte infoType, byte infoClass, int outputBufferLength) {
+		var response = handler.query(buildRequest(infoType, infoClass, fileOpen.fileId, outputBufferLength));
+
+		Assertions.assertInstanceOf(QueryInfoResponse.class, response);
+		Assertions.assertEquals(NTStatus.STATUS_BUFFER_OVERFLOW, response.header().status());
+		Assertions.assertEquals(outputBufferLength, extractOutput(response).length);
+	}
+
+	@ParameterizedTest(name = "InfoType {0}, class {1}, OutputBufferLength {2}")
+	@DisplayName("A buffer that doesn't hold the fixed part returns STATUS_INFO_LENGTH_MISMATCH")
+	@CsvSource(textBlock = """
+			1,  9,  3
+			1, 18, 99
+			2,  1, 17
+			2,  5, 11
+			1,  9,  0
+			1, 22,  0
+			""") // FileNameInformation, FileAllInformation, FileFsVolumeInformation, FileFsAttributeInformation; FileStreamInformation has no fixed part but an empty buffer fails nonetheless
+	void fixedPartDoesNotFit(byte infoType, byte infoClass, int outputBufferLength) {
+		var response = handler.query(buildRequest(infoType, infoClass, fileOpen.fileId, outputBufferLength));
+
+		Assertions.assertInstanceOf(ErrorResponse.class, response);
+		Assertions.assertEquals(NTStatus.STATUS_INFO_LENGTH_MISMATCH, response.header().status());
+	}
+
+	@Test
+	@DisplayName("Truncated FileNameInformation still states the full length of the name")
+	void truncatedNameStatesFullLength() {
+		var response = handler.query(buildRequest(
+				QueryInfoRequest.INFO_TYPE_FILE,
+				(byte) FileInfoClass.FILE_NAME_INFORMATION.value(),
+				fileOpen.fileId, 10));
+
+		int fileNameLength = MemorySegment.ofArray(extractOutput(response)).get(Layouts.LE_INT32, 0);
+		Assertions.assertEquals("\\demo.txt".getBytes(StandardCharsets.UTF_16LE).length, fileNameLength);
 	}
 
 	@Test

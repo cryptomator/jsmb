@@ -24,7 +24,7 @@ public enum FileInfoClass {
 	FILE_ACCESS_INFORMATION(8),
 
 	/** MS-FSCC 2.4.26 — path of the file in UTF-16LE. Variable. */
-	FILE_NAME_INFORMATION(9),
+	FILE_NAME_INFORMATION(9, 4),
 
 	/** MS-FSCC 2.4.38 — CurrentByteOffset. 8 bytes. */
 	FILE_POSITION_INFORMATION(14),
@@ -36,10 +36,10 @@ public enum FileInfoClass {
 	FILE_ALIGNMENT_INFORMATION(17),
 
 	/** MS-FSCC 2.4.2a — Composite: Basic + Standard + Internal + Ea + Access + Position + Mode + Alignment + Name. */
-	FILE_ALL_INFORMATION(18),
+	FILE_ALL_INFORMATION(18, 100),
 
 	/** MS-FSCC 2.4.44 — Alternate data streams. Returning an empty buffer means "no alternate streams". */
-	FILE_STREAM_INFORMATION(22),
+	FILE_STREAM_INFORMATION(22, 0),
 
 	/** MS-FSCC 2.4.25 — CreationTime/LastAccessTime/LastWriteTime/ChangeTime + sizes + attrs, packed tight. 56 bytes. */
 	FILE_NETWORK_OPEN_INFORMATION(34),
@@ -47,14 +47,33 @@ public enum FileInfoClass {
 	/** MS-FSCC 2.4.6 — FileAttributes + ReparseTag. 8 bytes. */
 	FILE_ATTRIBUTE_TAG_INFORMATION(35);
 
+	private static final int ENTIRELY_FIXED = -1;
+
 	private final int value;
+	private final int fixedPartSize;
 
 	FileInfoClass(int value) {
+		this(value, ENTIRELY_FIXED);
+	}
+
+	// fixedPartSize: the size of what precedes the variable-length data, for classes that have such data
+	FileInfoClass(int value, int fixedPartSize) {
 		this.value = value;
+		this.fixedPartSize = fixedPartSize;
 	}
 
 	public int value() {
 		return value;
+	}
+
+	/**
+	 * Tells how much of this class's information a client's buffer has to hold at least.
+	 *
+	 * @param totalSize the size of the complete information in bytes
+	 * @return the size of its fixed part, which is all of it unless the class ends with variable-length data
+	 */
+	public int fixedPartSize(int totalSize) {
+		return fixedPartSize == ENTIRELY_FIXED ? totalSize : fixedPartSize;
 	}
 
 	public static FileInfoClass fromValue(int value) {
