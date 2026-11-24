@@ -98,9 +98,7 @@ public record QueryDirectoryHandler(Connection connection) {
 
 	private PacketHeader buildResponseHeader(QueryDirectoryRequest request) {
 		var header = PacketHeader.builder();
-		header.creditCharge((char) 0);
 		header.command(Command.QUERY_DIRECTORY.value());
-		header.creditResponse((char) 1);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 		header.nextCommand(0);
 		header.messageId(request.header().messageId());

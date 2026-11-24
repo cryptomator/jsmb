@@ -97,9 +97,7 @@ public record QueryInfoHandler(Server server, Connection connection) {
 
 	private PacketHeader buildResponseHeader(QueryInfoRequest request) {
 		var header = PacketHeader.builder();
-		header.creditCharge((char) 0);
 		header.command(Command.QUERY_INFO.value());
-		header.creditResponse((char) 1);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 		header.nextCommand(0);
 		header.messageId(request.header().messageId());

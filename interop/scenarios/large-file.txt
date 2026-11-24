@@ -1,0 +1,12 @@
+# Round-trips a 3 MiB file, which makes smbclient send READ and WRITE requests of more than 64 KiB.
+# Such a request carries a CreditCharge greater than 1 and consumes as many consecutive MessageIds
+# (MS-SMB2 3.3.5.2.3, 3.3.5.2.5), so this scenario is what exercises the server's multi-credit
+# accounting with a real client. A server that grants too few credits in return makes the transfer
+# stall; one that miscounts MessageIds drops the connection.
+# Requires milestones: M4 (TREE_CONNECT), M5 (CREATE / CLOSE), M8 (READ), M9 (WRITE / FLUSH).
+!sh -c 'dd if=/dev/urandom of=/tmp/large.bin bs=1024 count=3072 2>/dev/null'
+put /tmp/large.bin large.bin
+get large.bin /tmp/large-roundtrip.bin
+!sh -c 'cmp /tmp/large.bin /tmp/large-roundtrip.bin && echo PAYLOAD_MATCH'
+rm large.bin
+exit

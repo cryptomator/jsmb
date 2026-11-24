@@ -45,6 +45,21 @@ public interface SMB2Message extends SMBMessage {
 		return Bytes.concat(header().segment().toArray(Layouts.BYTE), segment().toArray(Layouts.BYTE));
 	}
 
+	/**
+	 * Puts the credit fields into the header of a response.
+	 *
+	 * @param creditCharge   the CreditCharge of the request this message responds to
+	 * @param creditResponse the number of credits granted to the client
+	 * @return this message if its header says so already, otherwise a copy with an accordingly changed header
+	 */
+	default SMB2Message withCredits(char creditCharge, char creditResponse) {
+		if (header().creditCharge() == creditCharge && header().creditResponse() == creditResponse) {
+			return this;
+		}
+		record CreditedMessage(PacketHeader header, MemorySegment segment) implements SMB2Message {}
+		return new CreditedMessage(header().copy().creditCharge(creditCharge).creditResponse(creditResponse).build(), segment());
+	}
+
 	default SMB2Message sign(byte[] key, Connection connection) {
 		assert Objects.equals(connection.dialect, "3.1.1");
 		record SignedMessage(PacketHeader header, MemorySegment segment) implements SMB2Message {}

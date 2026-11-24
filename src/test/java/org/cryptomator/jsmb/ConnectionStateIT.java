@@ -1,5 +1,6 @@
 package org.cryptomator.jsmb;
 
+import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.PacketHeader;
 import org.cryptomator.jsmb.util.Layouts;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.net.Socket;
@@ -63,6 +65,48 @@ public class ConnectionStateIT {
 
 			Assertions.assertEquals(-1, firstByte, "expected end of stream instead of a response");
 		}
+	}
+
+	@Test
+	@Order(3)
+	@DisplayName("A MessageId outside of the command sequence window drops the connection without a reply")
+	public void messageIdOutsideWindow() throws IOException {
+		try (var socket = new Socket("localhost", server.getLocalPort())) {
+			socket.setSoTimeout(5000);
+			send(socket, negotiateWithoutDialects(1L)); // a fresh connection only accepts MessageId 0
+
+			int firstByte = socket.getInputStream().read();
+
+			Assertions.assertEquals(-1, firstByte, "expected end of stream instead of a response");
+		}
+	}
+
+	@Test
+	@Order(4)
+	@DisplayName("An error response grants a credit, and reusing a MessageId drops the connection without a reply")
+	public void reusedMessageId() throws IOException {
+		try (var socket = new Socket("localhost", server.getLocalPort())) {
+			socket.setSoTimeout(5000);
+			var in = new DataInputStream(socket.getInputStream());
+			send(socket, negotiateWithoutDialects(0L));
+			var errorResponse = new PacketHeader(MemorySegment.ofArray(in.readNBytes(in.readInt())).asSlice(0, PacketHeader.STRUCTURE_SIZE));
+			Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, errorResponse.status());
+			Assertions.assertEquals(1, errorResponse.creditResponse());
+			send(socket, negotiateWithoutDialects(0L));
+
+			int firstByte = in.read();
+
+			Assertions.assertEquals(-1, firstByte, "expected end of stream instead of a response");
+		}
+	}
+
+	// a NEGOTIATE request offering no dialect, which the server fails with STATUS_INVALID_PARAMETER while leaving the connection un-negotiated
+	private static byte[] negotiateWithoutDialects(long messageId) {
+		var header = PacketHeader.builder().command(Command.NEGOTIATE.value()).messageId(messageId).build();
+		var message = MemorySegment.ofArray(new byte[PacketHeader.STRUCTURE_SIZE + 36]);
+		MemorySegment.copy(header.segment(), 0, message, 0, PacketHeader.STRUCTURE_SIZE);
+		message.set(Layouts.LE_UINT16, PacketHeader.STRUCTURE_SIZE, (char) 36);
+		return message.toArray(Layouts.BYTE);
 	}
 
 	// an SMB2 header followed by a body that consists of nothing but its StructureSize field

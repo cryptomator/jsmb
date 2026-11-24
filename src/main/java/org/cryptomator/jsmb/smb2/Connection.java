@@ -40,6 +40,7 @@ public class Connection {
 	public boolean supportsChainedCompression = false;
 	public char[] RDMATransformIds = new char[0];
 	public boolean supportsMultiCredit = false;
+	public final CommandSequenceWindow commandSequenceWindow = new CommandSequenceWindow();
 	public boolean acceptTransportSecurity = false;
 
 	public char serverSecurityMode;

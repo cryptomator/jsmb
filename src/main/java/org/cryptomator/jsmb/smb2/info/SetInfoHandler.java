@@ -169,9 +169,7 @@ public record SetInfoHandler(Connection connection) {
 
 	private PacketHeader buildResponseHeader(SetInfoRequest request) {
 		var header = PacketHeader.builder();
-		header.creditCharge((char) 0);
 		header.command(Command.SET_INFO.value());
-		header.creditResponse((char) 1);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 		header.nextCommand(0);
 		header.messageId(request.header().messageId());

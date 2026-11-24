@@ -46,9 +46,7 @@ public record ErrorResponse(PacketHeader header, MemorySegment segment) implemen
 				.treeId(request.header().treeId()) //
 				.status(errorCode) //
 				.nextCommand(0) //
-				.flags(Flags.SERVER_TO_REDIR)
-				.creditResponse((char) 0) //
-				.creditCharge((char) 0) //
+				.flags(Flags.SERVER_TO_REDIR) //
 				.build();
 		return new ErrorResponse(header);
 	}

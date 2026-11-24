@@ -71,7 +71,7 @@ class NegotiatorRawNtlmTest {
 	void linuxCifsRawNtlm() {
 		var request = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, 0L, 1L);
 
-		var response = negotiator.sessionSetup(request);
+		var response = negotiator.sessionSetup(request, 1);
 
 		Assertions.assertInstanceOf(SessionSetupResponse.class, response);
 		Assertions.assertEquals(NTStatus.STATUS_MORE_PROCESSING_REQUIRED, response.header().status());
@@ -88,13 +88,13 @@ class NegotiatorRawNtlmTest {
 	@Test
 	@DisplayName("A failed second SESSION_SETUP leg removes the session from the connection's and the global session table")
 	void failedAuthenticationRemovesSession() {
-		var challenge = negotiator.sessionSetup(buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, 0L, 1L));
+		var challenge = negotiator.sessionSetup(buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, 0L, 1L), 1);
 		long sessionId = challenge.header().sessionId();
 		Assertions.assertTrue(connection.sessionTable.containsKey(sessionId));
 		// a NEGOTIATE_MESSAGE where the AUTHENTICATE_MESSAGE is due
 		var secondLeg = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, sessionId, 2L);
 
-		var response = negotiator.sessionSetup(secondLeg);
+		var response = negotiator.sessionSetup(secondLeg, 1);
 
 		Assertions.assertInstanceOf(ErrorResponse.class, response);
 		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
@@ -109,7 +109,7 @@ class NegotiatorRawNtlmTest {
 		session.state = Session.State.VALID;
 		var request = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, session.sessionId, 1L);
 
-		var response = negotiator.sessionSetup(request);
+		var response = negotiator.sessionSetup(request, 1);
 
 		Assertions.assertInstanceOf(ErrorResponse.class, response);
 		Assertions.assertEquals(NTStatus.STATUS_NOT_SUPPORTED, response.header().status());
@@ -126,7 +126,7 @@ class NegotiatorRawNtlmTest {
 			strictConnection.cipherId = EncryptionCapabilities.NO_COMMON_CIPHER;
 			var request = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, 0L, 1L);
 
-			var response = new Negotiator(strictServer, strictConnection).sessionSetup(request);
+			var response = new Negotiator(strictServer, strictConnection).sessionSetup(request, 1);
 
 			Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, response.header().status());
 		}
@@ -140,7 +140,7 @@ class NegotiatorRawNtlmTest {
 			strictConnection.clientCapabilities = GlobalCapabilities.SMB2_GLOBAL_CAP_ENCRYPTION;
 			var request = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, 0L, 1L);
 
-			var response = new Negotiator(strictServer, strictConnection).sessionSetup(request);
+			var response = new Negotiator(strictServer, strictConnection).sessionSetup(request, 1);
 
 			Assertions.assertEquals(NTStatus.STATUS_MORE_PROCESSING_REQUIRED, response.header().status());
 		}

@@ -2,6 +2,10 @@ package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.smb2.crypto.MessageSigner;
+import org.cryptomator.jsmb.smb2.io.ReadRequest;
+import org.cryptomator.jsmb.smb2.io.WriteRequest;
+import org.cryptomator.jsmb.smb2.ioctl.IoctlRequest;
+import org.cryptomator.jsmb.smb2.query.QueryDirectoryRequest;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.OptionalInt;
@@ -10,10 +14,14 @@ import java.util.OptionalInt;
  * Checks an incoming request against the connection's state before it is dispatched to its handler.
  *
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/85df1680-2ee7-4d25-a916-a982371ddc75">Verifying the Signature</a>
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/fba3123b-f566-4d8f-9715-0f529e856d25">Verifying the Credit Charge and the Payload Size</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/b495e2da-8711-4772-b292-453be0394b49">Verifying the Session</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/9a639360-87be-4d49-a1dd-4c6be0c020bd">Verifying the Tree Connect</a>
  */
 public class RequestVerifier {
+
+	// the payload size that one credit pays for
+	private static final int CREDIT_PAYLOAD_SIZE = 65536;
 
 	private final Connection connection;
 	private final MessageSigner signer = new MessageSigner();
@@ -60,6 +68,16 @@ public class RequestVerifier {
 			return OptionalInt.of(NTStatus.STATUS_ACCESS_DENIED);
 		}
 
+		// Verifying the Credit Charge and the Payload Size
+		if (connection.supportsMultiCredit) {
+			long payloadSize = payloadSize(request);
+			int creditCharge = request.header().creditCharge();
+			boolean sufficient = creditCharge == 0 ? payloadSize <= CREDIT_PAYLOAD_SIZE : (payloadSize - 1) / CREDIT_PAYLOAD_SIZE + 1 <= creditCharge;
+			if (!sufficient) {
+				return OptionalInt.of(NTStatus.STATUS_INVALID_PARAMETER);
+			}
+		}
+
 		// Verifying the Session
 		// NEGOTIATE, ECHO and CANCEL are not bound to a session; SESSION_SETUP does its own lookup, as it is what creates the session.
 		if (Command.isAnyOf(command, Command.NEGOTIATE, Command.SESSION_SETUP, Command.ECHO, Command.CANCEL)) {
@@ -98,5 +116,18 @@ public class RequestVerifier {
 		}
 		// The section's STATUS_ACCESS_DENIED cases can't occur: shares have no EncryptData setting of their own, and a session on a connection without cipher is refused if RejectUnencryptedAccess is set.
 		return OptionalInt.empty();
+	}
+
+	// The larger of a request's payload and the maximum size of its response, which is what its CreditCharge has to cover.
+	// Only these four commands are charged by size. Clients send any other command with a CreditCharge of 1, however large it is.
+	// See https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/0edce9a0-766e-41aa-a3b7-2044defbbb8f
+	private static long payloadSize(SMB2Message request) {
+		return switch (request) {
+			case ReadRequest read -> Integer.toUnsignedLong(read.length());
+			case WriteRequest write -> Integer.toUnsignedLong(write.length());
+			case QueryDirectoryRequest queryDirectory -> Integer.toUnsignedLong(queryDirectory.outputBufferLength());
+			case IoctlRequest ioctl -> Math.max(Integer.toUnsignedLong(ioctl.inputCount()), Integer.toUnsignedLong(ioctl.maxOutputResponse()));
+			default -> 0L;
+		};
 	}
 }

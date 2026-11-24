@@ -20,9 +20,10 @@ public record PacketHeader(MemorySegment segment) {
 
 	}
 
-	char creditCharge() {
+	public char creditCharge() {
 		return segment.get(Layouts.LE_UINT16, 6);
 	}
+
 
 	public int status() {
 		return segment.get(Layouts.LE_INT32, 8);
@@ -44,6 +45,7 @@ public record PacketHeader(MemorySegment segment) {
 	public char creditResponse() {
 		return segment.get(Layouts.LE_UINT16, 14);
 	}
+
 
 	public int flags() {
 		return segment.get(Layouts.LE_INT32, 16);
@@ -78,7 +80,7 @@ public record PacketHeader(MemorySegment segment) {
 	}
 
 	/**
-	 * Overwrites the TreeId in place.
+	 * Overwrites the TreeId in place, which only works for the header of a received message: a header built by {@link PacketHeaderBuilder} is read-only.
 	 *
 	 * @param treeId the TreeId this message is processed with
 	 */
@@ -95,7 +97,7 @@ public record PacketHeader(MemorySegment segment) {
 	}
 
 	/**
-	 * Overwrites the SessionId in place.
+	 * Overwrites the SessionId in place, which only works for the header of a received message: a header built by {@link PacketHeaderBuilder} is read-only.
 	 *
 	 * @param sessionId the SessionId this message is processed with
 	 */

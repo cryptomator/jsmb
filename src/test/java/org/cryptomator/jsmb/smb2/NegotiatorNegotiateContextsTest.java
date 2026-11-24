@@ -62,7 +62,7 @@ class NegotiatorNegotiateContextsTest {
 				TransportCapabilities.build(0));
 		var request = buildNegotiateRequest(contexts);
 
-		var response = negotiator.negotiate(request);
+		var response = negotiator.negotiate(request, 1);
 
 		Assertions.assertInstanceOf(NegotiateResponse.class, response);
 		var responseContextTypes = extractContextTypes((NegotiateResponse) response);
@@ -92,10 +92,10 @@ class NegotiatorNegotiateContextsTest {
 	@DisplayName("A second NEGOTIATE on a connection that has negotiated a dialect drops the connection")
 	void secondNegotiate() {
 		var contexts = List.<NegotiateContext>of(PreauthIntegrityCapabilities.build(PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512, new byte[32]));
-		negotiator.negotiate(buildNegotiateRequest(contexts));
+		negotiator.negotiate(buildNegotiateRequest(contexts), 1);
 		var request = buildNegotiateRequest(contexts);
 
-		Assertions.assertThrows(DisconnectException.class, () -> negotiator.negotiate(request));
+		Assertions.assertThrows(DisconnectException.class, () -> negotiator.negotiate(request, 1));
 	}
 
 	@Test
@@ -104,7 +104,7 @@ class NegotiatorNegotiateContextsTest {
 		negotiator.connection().negotiateDialect = Dialects.SMB2_WILDCARD;
 		var request = buildNegotiateRequest(List.of(PreauthIntegrityCapabilities.build(PreauthIntegrityCapabilities.HASH_ALGORITHM_SHA512, new byte[32])));
 
-		var response = negotiator.negotiate(request);
+		var response = negotiator.negotiate(request, 1);
 
 		Assertions.assertInstanceOf(NegotiateResponse.class, response);
 		Assertions.assertEquals(Dialects.SMB3_1_1, negotiator.connection().negotiateDialect);

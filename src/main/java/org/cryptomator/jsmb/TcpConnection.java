@@ -179,10 +179,18 @@ class TcpConnection implements Runnable {
 
 	private void handleSmb1Packet(MemorySegment segment) throws MalformedMessageException {
 		var msg = SMB1MessageParser.parse(segment);
+		// an SMB_COM_NEGOTIATE counts as MessageId 0, which a repeated one therefore can't get past
+		if (!connection.commandSequenceWindow.consume(0L, 1)) {
+			throw new DisconnectException("SMB_COM_NEGOTIATE after MessageId 0 got used");
+		}
 		var response = switch (msg) {
 			case SmbComNegotiateRequest request -> new SMB1Negotiator(server, connection).negotiate(request);
 			default -> throw new MalformedMessageException("Command not implemented: " + msg.command());
 		};
+		if (response instanceof SMB2Message) {
+			// the wildcard response to a multi-protocol negotiate grants the one credit that the client's SMB2 NEGOTIATE needs
+			connection.commandSequenceWindow.grant(1);
+		}
 		writeWire(response.serialize());
 	}
 
@@ -198,6 +206,20 @@ class TcpConnection implements Runnable {
 			// Verifying the Connection State: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/4daf7dce-9f49-4413-99bf-323801c9283d
 			if (!(msg instanceof NegotiateRequest) && (connection.negotiateDialect == Dialects.NONE || connection.negotiateDialect == Dialects.SMB2_WILDCARD)) {
 				throw new DisconnectException("Request on a connection that hasn't negotiated a dialect yet");
+			}
+			// Verifying the Sequence Number: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/0326f784-0baf-45fd-9687-626859ef5a9b
+			// CANCEL carries the MessageId of the request it cancels and consumes none itself.
+			int creditCharge = msg.header().creditCharge();
+			int consumedCredits = connection.supportsMultiCredit && creditCharge > 0 ? creditCharge : 1;
+			int grantedCredits = 0;
+			if (!(msg instanceof CancelRequest)) {
+				if (!connection.commandSequenceWindow.consume(msg.header().messageId(), consumedCredits)) {
+					throw new DisconnectException("MessageId " + msg.header().messageId() + " (credit charge " + creditCharge + ") is not within the command sequence window");
+				}
+				// Granting Credits to the Client: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/46256e72-b361-4d73-ac7d-d47c04b32e4b
+				// Asking for no less than the request consumed keeps the client from running dry, whatever it requested and however the request ends.
+				// Decided before dispatching, as NEGOTIATE and SESSION_SETUP responses must be final by the time they get hashed for preauth integrity.
+				grantedCredits = connection.commandSequenceWindow.grant(Math.max(msg.header().creditRequest(), consumedCredits));
 			}
 			var sessionId = chain.sessionId(msg);
 			var treeId = chain.treeId(msg);
@@ -217,8 +239,8 @@ class TcpConnection implements Runnable {
 			// looked up before dispatching, as a LOGOFF response still has to be signed or encrypted with the keys of the session it just removed
 			var sessionBefore = sessionId == null ? null : connection.sessionTable.get(sessionId);
 			SMB2Message response = rejection.isPresent() ? reject(msg, rejection.getAsInt()) : switch (msg) {
-				case NegotiateRequest request -> negotiator.negotiate(request);
-				case SessionSetupRequest request -> negotiator.sessionSetup(request);
+				case NegotiateRequest request -> negotiator.negotiate(request, grantedCredits);
+				case SessionSetupRequest request -> negotiator.sessionSetup(request, grantedCredits);
 				case LogoffRequest request -> runtime.logoff(request);
 				case IoctlRequest request -> ioctlHandler.handle(request);
 				case TreeConnectRequest request -> treeConnectHandler.connect(request);
@@ -256,8 +278,9 @@ class TcpConnection implements Runnable {
 			if (response instanceof CreateResponse cr) {
 				chainedFileId = cr.fileId();
 			}
-			var session = sessionOf(response, sessionBefore);
-			var signed = sign(msg, response, session);
+			var credited = response.withCredits(msg.header().creditCharge(), (char) grantedCredits);
+			var session = sessionOf(credited, sessionBefore);
+			var signed = sign(msg, credited, session);
 			writeWire(maybeEncrypt(signed, requestEncrypted, session));
 		} while (nextCommand != 0);
 	}

@@ -46,7 +46,14 @@ public record Negotiator(Server server, Connection connection) {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Negotiator.class);
 
-	public SMB2Message negotiate(NegotiateRequest request) {
+	/**
+	 * Handles an SMB2 NEGOTIATE request.
+	 *
+	 * @param request        the request
+	 * @param grantedCredits the credits granted to the client with the response. They have to be known here already, as the response becomes part of the preauth integrity hash and must not change afterwards.
+	 * @return the response
+	 */
+	public SMB2Message negotiate(NegotiateRequest request, int grantedCredits) {
 		// A second NEGOTIATE is only legitimate as the follow-up to the wildcard response of a multi-protocol negotiate.
 		if (connection.negotiateDialect != Dialects.NONE && connection.negotiateDialect != Dialects.SMB2_WILDCARD) {
 			throw new DisconnectException("NEGOTIATE on a connection that has already negotiated a dialect");
@@ -134,10 +141,10 @@ public record Negotiator(Server server, Connection connection) {
 
 		// create response
 		var header = PacketHeader.builder();
-		header.creditCharge((char) 0);
+		header.creditCharge(request.header().creditCharge());
 		header.status(NTStatus.STATUS_SUCCESS);
 		header.command(Command.NEGOTIATE.value());
-		header.creditResponse((char) 1);
+		header.creditResponse((char) grantedCredits);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 		header.nextCommand(0);
 		header.messageId(request.header().messageId());
@@ -211,7 +218,14 @@ public record Negotiator(Server server, Connection connection) {
 		return response;
 	}
 
-	public SMB2Message sessionSetup(SessionSetupRequest request) {
+	/**
+	 * Handles an SMB2 SESSION_SETUP request.
+	 *
+	 * @param request        the request
+	 * @param grantedCredits the credits granted to the client with the response. They have to be known here already, as the response becomes part of the preauth integrity hash and must not change afterwards.
+	 * @return the response
+	 */
+	public SMB2Message sessionSetup(SessionSetupRequest request, int grantedCredits) {
 		var global = connection.global;
 		assert connection.dialect != null;
 
@@ -236,7 +250,7 @@ public record Negotiator(Server server, Connection connection) {
 			Thread.currentThread().setName("Session-" + session.sessionId);
 			session.state = Session.State.IN_PROGRESS;
 			session.preauthIntegrityHashValue = connection.preauthIntegrityHashValue;
-			return gssAuthenticate(request, session);
+			return gssAuthenticate(request, session, grantedCredits);
 		}
 
 		//Step 4
@@ -260,18 +274,18 @@ public record Negotiator(Server server, Connection connection) {
 			//See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
 			session.state = Session.State.IN_PROGRESS;
 			session.securityContext = null;
-			return gssAuthenticate(request, session); //TODO Handle reauthentication in gssAuthenticate
+			return gssAuthenticate(request, session, grantedCredits); //TODO Handle reauthentication in gssAuthenticate
 		} else if (session.state == Session.State.VALID) { //Step 6
 			//See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
 			//TODO Handle reauthentication in gssAuthenticate. Until then, reject the request and keep the session as is.
 			return ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
 		} else { //Step 7
-			return gssAuthenticate(request, session);
+			return gssAuthenticate(request, session, grantedCredits);
 		}
 	}
 
 	//https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654
-	private SMB2Message gssAuthenticate(SessionSetupRequest request, Session session) {
+	private SMB2Message gssAuthenticate(SessionSetupRequest request, Session session, int grantedCredits) {
 		assert session.connection == connection;
 		if ((request.flags() & SessionSetupRequest.FLAG_BINDING) != 0) {
 			//Please mind TcpConnection#channelSigningKey
@@ -279,9 +293,9 @@ public record Negotiator(Server server, Connection connection) {
 		}
 		// create response
 		var header = PacketHeader.builder();
-		header.creditCharge((char) 0);
+		header.creditCharge(request.header().creditCharge());
 		header.command(Command.SESSION_SETUP.value());
-		header.creditResponse((char) 1);
+		header.creditResponse((char) grantedCredits);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 		header.nextCommand(0);
 		header.messageId(request.header().messageId());
@@ -326,7 +340,6 @@ public record Negotiator(Server server, Connection connection) {
 					var creds = connection.global.credentials;
 					var authenticated = s.authenticate(inboundNtlm, creds.user(), creds.password(), creds.domain());
 					header.status(NTStatus.STATUS_SUCCESS);
-					header.creditResponse((char) 8192);
 					// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654
 					session.ntlmSession = authenticated;
 					session.sessionKey = authenticated.exportedSessionKey(); // step 6

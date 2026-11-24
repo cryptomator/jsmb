@@ -3,6 +3,8 @@ package org.cryptomator.jsmb.smb2;
 import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.common.NTStatus;
+import org.cryptomator.jsmb.smb2.io.ReadRequest;
+import org.cryptomator.jsmb.util.Layouts;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.foreign.MemorySegment;
@@ -86,6 +89,59 @@ class RequestVerifierTest {
 		var rejection = verify(request, null);
 
 		Assertions.assertTrue(rejection.isEmpty());
+	}
+
+	@Nested
+	@DisplayName("Credit charge verification")
+	class CreditCharge {
+
+		private Session session;
+
+		@BeforeEach
+		void setUp() {
+			connection.supportsMultiCredit = true;
+			session = sessionWithTree();
+		}
+
+		@ParameterizedTest(name = "READ of {0} bytes with CreditCharge {1}")
+		@DisplayName("A request whose CreditCharge doesn't cover its size is rejected with STATUS_INVALID_PARAMETER")
+		@CsvSource({"65537, 0", "65537, 1", "131073, 2", "8388608, 127"})
+		void insufficientCreditCharge(int length, int creditCharge) {
+			var request = readRequest(length, creditCharge);
+
+			var rejection = verify(request, null);
+
+			Assertions.assertEquals(OptionalInt.of(NTStatus.STATUS_INVALID_PARAMETER), rejection);
+		}
+
+		@ParameterizedTest(name = "READ of {0} bytes with CreditCharge {1}")
+		@DisplayName("A request whose CreditCharge covers its size passes")
+		@CsvSource({"0, 0", "65536, 0", "65536, 1", "65537, 2", "131072, 2", "8388608, 128", "4096, 5"})
+		void sufficientCreditCharge(int length, int creditCharge) {
+			var request = readRequest(length, creditCharge);
+
+			var rejection = verify(request, null);
+
+			Assertions.assertTrue(rejection.isEmpty());
+		}
+
+		@Test
+		@DisplayName("The CreditCharge is not verified if the connection doesn't support multi-credit requests")
+		void multiCreditNotSupported() {
+			connection.supportsMultiCredit = false;
+			var request = readRequest(131072, 0);
+
+			var rejection = verify(request, null);
+
+			Assertions.assertTrue(rejection.isEmpty());
+		}
+
+		private ReadRequest readRequest(int length, int creditCharge) {
+			var header = PacketHeader.builder().command(Command.READ.value()).creditCharge((char) creditCharge).sessionId(session.sessionId).treeId(TREE_ID).build();
+			var body = MemorySegment.ofArray(new byte[49]);
+			body.set(Layouts.LE_INT32, 4, length); // Length
+			return new ReadRequest(header, body);
+		}
 	}
 
 	@Nested

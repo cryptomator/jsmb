@@ -41,9 +41,7 @@ public record Runtime(Connection connection) {
 
 	private PacketHeader buildResponseHeader(SMB2Message request, Command command, int treeId, int status) {
 		var header = PacketHeader.builder();
-		header.creditCharge((char) 0);
 		header.command(command.value());
-		header.creditResponse((char) 1);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 		header.nextCommand(0);
 		header.messageId(request.header().messageId());

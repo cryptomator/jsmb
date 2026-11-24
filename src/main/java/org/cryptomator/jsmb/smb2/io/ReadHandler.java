@@ -70,9 +70,7 @@ public record ReadHandler(Connection connection) {
 
 	private PacketHeader buildResponseHeader(ReadRequest request) {
 		var header = PacketHeader.builder();
-		header.creditCharge((char) 0);
 		header.command(Command.READ.value());
-		header.creditResponse((char) 1);
 		header.flags(SMB2Message.Flags.SERVER_TO_REDIR);
 		header.nextCommand(0);
 		header.messageId(request.header().messageId());
