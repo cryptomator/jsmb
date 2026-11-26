@@ -274,6 +274,10 @@ class TcpConnection implements Runnable {
 			if (response instanceof CreateResponse cr) {
 				chainedFileId = cr.fileId();
 			}
+			if (response.header().status() != NTStatus.STATUS_SUCCESS) {
+				// the one place where every refusal shows up, whichever check or handler it stems from
+				LOG.debug("Command 0x{} (messageId={}) answered with status 0x{}", Integer.toHexString(msg.header().command()), msg.header().messageId(), Integer.toHexString(response.header().status()));
+			}
 			var credited = response.withCredits(msg.header().creditCharge(), (char) grantedCredits);
 			var session = sessionOf(credited, sessionBefore);
 			var signed = sign(msg, credited, session);
