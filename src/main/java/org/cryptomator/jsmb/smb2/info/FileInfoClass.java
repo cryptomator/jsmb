@@ -76,6 +76,18 @@ public enum FileInfoClass {
 		return fixedPartSize == ENTIRELY_FIXED ? totalSize : fixedPartSize;
 	}
 
+	/**
+	 * Tells whether querying this class takes {@code FILE_READ_ATTRIBUTES} on the open (MS-SMB2 3.3.5.20.1).
+	 *
+	 * @return {@code true} if the information includes the file's attributes
+	 */
+	public boolean requiresReadAttributes() {
+		return switch (this) {
+			case FILE_BASIC_INFORMATION, FILE_ALL_INFORMATION, FILE_NETWORK_OPEN_INFORMATION, FILE_ATTRIBUTE_TAG_INFORMATION -> true;
+			default -> false;
+		};
+	}
+
 	public static FileInfoClass fromValue(int value) {
 		for (var v : values()) {
 			if (v.value == value) return v;

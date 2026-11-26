@@ -5,6 +5,7 @@ import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.FileBasicInfo;
 import org.cryptomator.jsmb.share.nio.NioShare;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -56,7 +57,7 @@ class QueryDirectoryHandlerTest {
 				new org.cryptomator.jsmb.share.OpenParams(0, 0,
 						org.cryptomator.jsmb.share.OpenParams.Disposition.OPEN,
 						org.cryptomator.jsmb.share.OpenParams.OPTION_DIRECTORY_FILE));
-		rootOpen = new Open(backend.fileId(), backend, session, treeConnect, "", 0);
+		rootOpen = new Open(backend.fileId(), backend, session, treeConnect, "", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(rootOpen.fileId, rootOpen);
 	}
 
@@ -96,6 +97,18 @@ class QueryDirectoryHandlerTest {
 
 		Assertions.assertInstanceOf(ErrorResponse.class, second);
 		Assertions.assertEquals(NTStatus.STATUS_NO_MORE_FILES, second.header().status());
+	}
+
+	@Test
+	@DisplayName("An open without FILE_LIST_DIRECTORY returns STATUS_ACCESS_DENIED")
+	void withoutListAccess() {
+		session.openTable.put(rootOpen.fileId, new Open(rootOpen.fileId, rootOpen.backend, session, treeConnect, "", 0, AccessMask.FILE_READ_ATTRIBUTES | AccessMask.SYNCHRONIZE));
+
+		var response = handler.query(buildRequest(rootOpen.fileId,
+				FileInformationClass.FILE_ID_BOTH_DIRECTORY_INFORMATION,
+				QueryDirectoryRequest.FLAG_RESTART_SCAN, "*", 65536));
+
+		Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, response.header().status());
 	}
 
 	@ParameterizedTest(name = "OutputBufferLength = {0}")

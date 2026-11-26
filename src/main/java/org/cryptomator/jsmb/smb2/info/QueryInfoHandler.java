@@ -4,6 +4,7 @@ import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.FileBasicInfo;
 import org.cryptomator.jsmb.share.FileStandardInfo;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -15,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.util.Arrays;
 
 /**
@@ -90,9 +92,13 @@ public record QueryInfoHandler(Server server, Connection connection) {
 			LOG.debug("QUERY_INFO FILE with unsupported class 0x{}", Integer.toHexString(request.fileInfoClass()));
 			throw new UnsupportedInfoClassException();
 		}
+		// MS-SMB2 3.3.5.20.1: "[...] and Open.GrantedAccess does not include FILE_READ_ATTRIBUTES, the server MUST fail the request with STATUS_ACCESS_DENIED."
+		if (cls.requiresReadAttributes() && !open.isGranted(AccessMask.FILE_READ_ATTRIBUTES)) {
+			throw new AccessDeniedException(open.path); // which the caller maps to that status
+		}
 		FileBasicInfo basic = open.backend.queryBasic();
 		FileStandardInfo standard = open.backend.queryStandard();
-		byte[] data = FileInfoWriter.write(cls, open.path, basic, standard);
+		byte[] data = FileInfoWriter.write(cls, open.path, open.grantedAccess, basic, standard);
 		return new Info(data, cls.fixedPartSize(data.length));
 	}
 

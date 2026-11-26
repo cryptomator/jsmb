@@ -73,11 +73,11 @@ class FileInfoWriterTest {
 	}
 
 	@Test
-	@DisplayName("FileAccessInformation reports FILE_ALL_ACCESS")
+	@DisplayName("FileAccessInformation reports the rights granted on the open")
 	void accessInfo() {
-		byte[] bytes = FileInfoWriter.accessInfo();
+		byte[] bytes = FileInfoWriter.accessInfo(0x00120089);
 		Assertions.assertEquals(4, bytes.length);
-		Assertions.assertEquals(0x001F01FF, MemorySegment.ofArray(bytes).get(Layouts.LE_INT32, 0));
+		Assertions.assertEquals(0x00120089, MemorySegment.ofArray(bytes).get(Layouts.LE_INT32, 0));
 	}
 
 	@Test
@@ -129,7 +129,7 @@ class FileInfoWriterTest {
 	@Test
 	@DisplayName("FileAllInformation concatenates Basic + Standard + Internal + Ea + Access + Position + Mode + Alignment + Name")
 	void allInfoComposite() {
-		byte[] bytes = FileInfoWriter.allInfo("file.txt", BASIC, STD);
+		byte[] bytes = FileInfoWriter.allInfo("file.txt", 0x00120089, BASIC, STD);
 		byte[] nameBytes = "\\file.txt".getBytes(StandardCharsets.UTF_16LE);
 		Assertions.assertEquals(96 + 4 + nameBytes.length, bytes.length);
 		var seg = MemorySegment.ofArray(bytes);
@@ -140,7 +140,7 @@ class FileInfoWriterTest {
 		// Internal at offset 64
 		Assertions.assertNotEquals(0L, seg.get(Layouts.LE_INT64, 64));
 		// Access at offset 76
-		Assertions.assertEquals(0x001F01FF, seg.get(Layouts.LE_INT32, 76));
+		Assertions.assertEquals(0x00120089, seg.get(Layouts.LE_INT32, 76));
 		// Name length at offset 96
 		Assertions.assertEquals(nameBytes.length, seg.get(Layouts.LE_INT32, 96));
 	}

@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2.io;
 
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.SmbFile;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -35,6 +36,11 @@ public record WriteHandler(Connection connection) {
 		if (!(open.backend instanceof SmbFile file)) {
 			// WRITE on a directory handle — spec (MS-SMB2 3.3.5.13) has the server reject this.
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_DEVICE_REQUEST);
+		}
+		// MS-SMB2 3.3.5.13 calls for FILE_WRITE_DATA to write within the file and for FILE_APPEND_DATA to extend it, as a SHOULD.
+		// Telling the two apart would take a look at the file size per request, so either right will do for both.
+		if (!open.isGranted(AccessMask.FILE_WRITE_DATA) && !open.isGranted(AccessMask.FILE_APPEND_DATA)) {
+			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
 
 		int length = request.length();

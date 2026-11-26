@@ -5,6 +5,7 @@ import org.cryptomator.jsmb.Server;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.nio.NioShare;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -60,7 +62,7 @@ class QueryInfoHandlerTest {
 		Files.writeString(shareRoot.resolve("demo.txt"), "hello");
 		var backend = share.open("demo.txt",
 				new OpenParams(0, 0, OpenParams.Disposition.OPEN, 0));
-		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "demo.txt", 0);
+		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "demo.txt", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(fileOpen.fileId, fileOpen);
 	}
 
@@ -91,6 +93,38 @@ class QueryInfoHandlerTest {
 		Assertions.assertEquals(24, buffer.length);
 		var seg = MemorySegment.ofArray(buffer);
 		Assertions.assertEquals(5L, seg.get(Layouts.LE_INT64, 8), "endOfFile = 5 (len of 'hello')");
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("FILE info classes that include the attributes return STATUS_ACCESS_DENIED on an open without FILE_READ_ATTRIBUTES")
+	@EnumSource(value = FileInfoClass.class, names = {"FILE_BASIC_INFORMATION", "FILE_ALL_INFORMATION", "FILE_NETWORK_OPEN_INFORMATION", "FILE_ATTRIBUTE_TAG_INFORMATION"})
+	void attributesWithoutReadAttributes(FileInfoClass infoClass) {
+		session.openTable.put(fileOpen.fileId, new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "demo.txt", 0, AccessMask.FILE_READ_DATA));
+
+		var response = handler.query(buildRequest(QueryInfoRequest.INFO_TYPE_FILE, (byte) infoClass.value(), fileOpen.fileId, 4096));
+
+		Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, response.header().status());
+	}
+
+	@Test
+	@DisplayName("FILE + FileStandardInformation takes no FILE_READ_ATTRIBUTES")
+	void standardWithoutReadAttributes() {
+		session.openTable.put(fileOpen.fileId, new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "demo.txt", 0, AccessMask.FILE_READ_DATA));
+
+		var response = handler.query(buildRequest(QueryInfoRequest.INFO_TYPE_FILE, (byte) FileInfoClass.FILE_STANDARD_INFORMATION.value(), fileOpen.fileId, 4096));
+
+		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+	}
+
+	@Test
+	@DisplayName("FILE + FileAccessInformation returns the rights granted on the open")
+	void fileAccessInformation() {
+		int grantedAccess = AccessMask.FILE_READ_DATA | AccessMask.FILE_READ_ATTRIBUTES;
+		session.openTable.put(fileOpen.fileId, new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "demo.txt", 0, grantedAccess));
+
+		var response = handler.query(buildRequest(QueryInfoRequest.INFO_TYPE_FILE, (byte) FileInfoClass.FILE_ACCESS_INFORMATION.value(), fileOpen.fileId, 4096));
+
+		Assertions.assertEquals(grantedAccess, MemorySegment.ofArray(extractOutput(response)).get(Layouts.LE_INT32, 0));
 	}
 
 	@Test

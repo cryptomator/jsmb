@@ -3,6 +3,7 @@ package org.cryptomator.jsmb.smb2.info;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.FileBasicInfo;
 import org.cryptomator.jsmb.share.SmbFile;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -74,6 +75,16 @@ public record SetInfoHandler(Connection connection) {
 
 	private int applyFileInfo(Open open, SetInfoRequest request) throws IOException {
 		var buffer = request.buffer();
+		// MS-SMB2 3.3.5.21.1: "[...] and Open.GrantedAccess does not include [the right], the server MUST fail the request with STATUS_ACCESS_DENIED."
+		int requiredAccess = switch (request.fileInfoClass()) {
+			case FILE_BASIC_INFORMATION -> AccessMask.FILE_WRITE_ATTRIBUTES;
+			case FILE_RENAME_INFORMATION, FILE_DISPOSITION_INFORMATION -> AccessMask.DELETE;
+			case FILE_END_OF_FILE_INFORMATION -> AccessMask.FILE_WRITE_DATA;
+			default -> 0;
+		};
+		if (!open.isGranted(requiredAccess)) {
+			return NTStatus.STATUS_ACCESS_DENIED;
+		}
 		return switch (request.fileInfoClass()) {
 			case FILE_BASIC_INFORMATION -> applyBasic(open, buffer);
 			case FILE_DISPOSITION_INFORMATION -> applyDisposition(open, buffer);

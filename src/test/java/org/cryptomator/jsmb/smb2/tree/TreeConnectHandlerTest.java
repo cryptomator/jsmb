@@ -9,6 +9,7 @@ import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.SmbOpen;
 import org.cryptomator.jsmb.share.SmbShare;
 import org.cryptomator.jsmb.share.nio.NioShare;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -175,7 +176,7 @@ class TreeConnectHandlerTest {
 		Files.writeString(shareRoot.resolve(name), "content");
 		var backend = nioShare.open(name, new OpenParams(0x00130089, 0x00000007, OpenParams.Disposition.OPEN, 0));
 		backend.setDeletePending(true);
-		var open = new Open(backend.fileId(), backend, session, treeConnect, name, 0);
+		var open = new Open(backend.fileId(), backend, session, treeConnect, name, 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(open.fileId, open);
 		return open;
 	}

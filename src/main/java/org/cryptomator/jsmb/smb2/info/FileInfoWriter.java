@@ -19,18 +19,28 @@ public final class FileInfoWriter {
 
 	private FileInfoWriter() {}
 
-	public static byte[] write(FileInfoClass cls, String openPath, FileBasicInfo basic, FileStandardInfo standard) {
+	/**
+	 * Serializes one info class.
+	 *
+	 * @param cls           the info class to serialize
+	 * @param openPath      the open's path relative to the share root, delimited by forward slashes
+	 * @param grantedAccess the rights the client holds on the open
+	 * @param basic         the target's timestamps and attributes
+	 * @param standard      the target's sizes and flags
+	 * @return the information in its wire format
+	 */
+	public static byte[] write(FileInfoClass cls, String openPath, int grantedAccess, FileBasicInfo basic, FileStandardInfo standard) {
 		return switch (cls) {
 			case FILE_BASIC_INFORMATION -> basicInfo(basic);
 			case FILE_STANDARD_INFORMATION -> standardInfo(standard);
 			case FILE_INTERNAL_INFORMATION -> internalInfo(openPath);
 			case FILE_EA_INFORMATION -> eaInfo();
-			case FILE_ACCESS_INFORMATION -> accessInfo();
+			case FILE_ACCESS_INFORMATION -> accessInfo(grantedAccess);
 			case FILE_NAME_INFORMATION -> nameInfo(openPath);
 			case FILE_POSITION_INFORMATION -> positionInfo();
 			case FILE_MODE_INFORMATION -> modeInfo();
 			case FILE_ALIGNMENT_INFORMATION -> alignmentInfo();
-			case FILE_ALL_INFORMATION -> allInfo(openPath, basic, standard);
+			case FILE_ALL_INFORMATION -> allInfo(openPath, grantedAccess, basic, standard);
 			case FILE_STREAM_INFORMATION -> streamInfo();
 			case FILE_NETWORK_OPEN_INFORMATION -> networkOpenInfo(basic, standard);
 			case FILE_ATTRIBUTE_TAG_INFORMATION -> attributeTagInfo(basic);
@@ -86,12 +96,12 @@ public final class FileInfoWriter {
 	}
 
 	/**
-	 * 4 bytes. Reports {@code FILE_ALL_ACCESS} until actual access control lands.
+	 * 4 bytes. Reports the rights the client holds on the open.
 	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/01cf43d2-deb3-40d3-a39b-9e68693d7c90">MS-FSCC 2.4.2 FileAccessInformation</a>
 	 */
-	static byte[] accessInfo() {
+	static byte[] accessInfo(int grantedAccess) {
 		var buf = alloc(4);
-		buf.putInt(0x001F01FF);                // FILE_ALL_ACCESS
+		buf.putInt(grantedAccess);
 		return buf.array();
 	}
 
@@ -137,7 +147,7 @@ public final class FileInfoWriter {
 	 * Alignment(4) + Name(variable). The fixed prefix is 96 bytes.
 	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/95f3056a-ebc1-4f5d-b938-3f68a44677a6">MS-FSCC 2.4.2a FileAllInformation</a>
 	 */
-	static byte[] allInfo(String openPath, FileBasicInfo basic, FileStandardInfo standard) {
+	static byte[] allInfo(String openPath, int grantedAccess, FileBasicInfo basic, FileStandardInfo standard) {
 		byte[] nameBytes = displayName(openPath).getBytes(StandardCharsets.UTF_16LE);
 		var buf = alloc(96 + 4 + nameBytes.length);
 		// Basic
@@ -159,7 +169,7 @@ public final class FileInfoWriter {
 		// Ea
 		buf.putInt(0);
 		// Access
-		buf.putInt(0x001F01FF);
+		buf.putInt(grantedAccess);
 		// Position
 		buf.putLong(0L);
 		// Mode

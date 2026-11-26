@@ -7,6 +7,7 @@ import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.SmbDirectory;
 import org.cryptomator.jsmb.share.SmbFile;
 import org.cryptomator.jsmb.share.SmbOpen;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -94,7 +95,7 @@ public record CreateHandler(Connection connection) {
 		}
 
 		var fileId = backend.fileId();
-		session.openTable.put(fileId, new Open(fileId, backend, session, treeConnect, name, request.createOptions())); // FILE_DELETE_ON_CLOSE takes effect when the open is closed
+		session.openTable.put(fileId, new Open(fileId, backend, session, treeConnect, name, request.createOptions(), AccessMask.grantedFor(request.desiredAccess()))); // FILE_DELETE_ON_CLOSE takes effect when the open is closed
 		LOG.debug("CREATE '{}' → fileId={}  action={}", name, fileId, disposition);
 
 		var header = buildResponseHeader(request, Command.CREATE, treeConnect.treeId());
@@ -113,20 +114,16 @@ public record CreateHandler(Connection connection) {
 		response.createContextsOffset(0);
 		response.createContextsLength(0);
 		if (request.hasCreateContext(CreateContext.NAME_MXAC)) {
-			// The client is asking for the maximal access mask on the freshly opened handle. We don't track ACLs,
-			// so mirror FileInfoWriter.accessInfo() and report FILE_ALL_ACCESS with a success status.
-			response = response.withCreateContexts(List.of(CreateContext.mxAcResponse(NTStatus.STATUS_SUCCESS, FILE_ALL_ACCESS)));
+			// The client is asking for the maximal access the user has on the object, which is not what this open was granted.
+			// We don't track ACLs, so that is everything.
+			response = response.withCreateContexts(List.of(CreateContext.mxAcResponse(NTStatus.STATUS_SUCCESS, AccessMask.FILE_ALL_ACCESS)));
 		}
 		return response;
 	}
 
-	/** {@code FILE_ALL_ACCESS} — full generic access mask. MS-DTYP 2.4.3. */
-	private static final int FILE_ALL_ACCESS = 0x001F01FF;
-
 	private static final int OPTION_OPEN_BY_FILE_ID = 0x00002000;
 	private static final int OPTION_RESERVE_OPFILTER = 0x00100000;
 	private static final int DIRECTORY_OPTIONS = OpenParams.OPTION_DIRECTORY_FILE | OpenParams.OPTION_NON_DIRECTORY_FILE;
-	private static final int RESERVED_ACCESS_BITS = 0x0CE0FE00;
 
 	// The checks of a CREATE request that need no look at the share: MS-SMB2 2.2.13 for the options, MS-FSA 2.1.5.1 phase 1 for the rest. Yields the status to fail the request with.
 	private static int validate(CreateRequest request, OpenParams.Disposition disposition) {
@@ -145,8 +142,12 @@ public record CreateHandler(Connection connection) {
 		if (directory && !directoryDisposition) {
 			return NTStatus.STATUS_INVALID_PARAMETER;
 		}
-		if (request.desiredAccess() == 0 || (request.desiredAccess() & RESERVED_ACCESS_BITS) != 0) {
+		if (request.desiredAccess() == 0 || (request.desiredAccess() & AccessMask.RESERVED) != 0) {
 			return NTStatus.STATUS_ACCESS_DENIED;
+		}
+		// "When this option is set, the DesiredAccess field MUST include the DELETE flag." A generic right that includes DELETE will do.
+		if ((options & OpenParams.OPTION_DELETE_ON_CLOSE) != 0 && (AccessMask.grantedFor(request.desiredAccess()) & AccessMask.DELETE) == 0) {
+			return NTStatus.STATUS_INVALID_PARAMETER;
 		}
 		var name = request.name();
 		if (PathNames.referencesStream(name)) {

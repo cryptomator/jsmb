@@ -6,6 +6,7 @@ import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.SmbOpen;
 import org.cryptomator.jsmb.share.nio.NioShare;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -21,6 +22,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -56,7 +59,7 @@ class WriteHandlerTest {
 		// DesiredAccess FILE_WRITE_DATA (0x0002) | FILE_READ_DATA (0x0001); share all; OPEN disposition.
 		SmbOpen backend = share.open("out.bin",
 				new OpenParams(0x00120003, 0x00000007, OpenParams.Disposition.OPEN, 0));
-		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "out.bin", 0);
+		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "out.bin", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(fileOpen.fileId, fileOpen);
 	}
 
@@ -82,6 +85,28 @@ class WriteHandlerTest {
 		Assertions.assertEquals(8, Files.size(targetFile));
 		byte[] actual = Files.readAllBytes(targetFile);
 		Assertions.assertArrayEquals("end".getBytes(), new byte[]{actual[5], actual[6], actual[7]});
+	}
+
+	@Test
+	@DisplayName("WRITE on an open with neither FILE_WRITE_DATA nor FILE_APPEND_DATA returns STATUS_ACCESS_DENIED")
+	void writeWithoutWriteAccess() throws IOException {
+		session.openTable.put(fileOpen.fileId, new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "out.bin", 0, AccessMask.FILE_READ_DATA | AccessMask.FILE_WRITE_ATTRIBUTES));
+
+		var response = handler.write(buildWriteRequest(fileOpen.fileId, 0, "denied".getBytes()));
+
+		Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, response.header().status());
+		Assertions.assertEquals(0, Files.size(targetFile));
+	}
+
+	@ParameterizedTest(name = "GrantedAccess = {0}")
+	@DisplayName("WRITE on an open with either FILE_WRITE_DATA or FILE_APPEND_DATA succeeds")
+	@ValueSource(ints = {AccessMask.FILE_WRITE_DATA, AccessMask.FILE_APPEND_DATA})
+	void writeWithWriteAccess(int grantedAccess) {
+		session.openTable.put(fileOpen.fileId, new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "out.bin", 0, grantedAccess));
+
+		var response = handler.write(buildWriteRequest(fileOpen.fileId, 0, "granted".getBytes()));
+
+		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
 	}
 
 	@Test
@@ -145,7 +170,7 @@ class WriteHandlerTest {
 	@DisplayName("FLUSH against a directory handle returns a FlushResponse")
 	void flushDirectoryHandle() throws IOException {
 		var backend = treeConnect.share().open("", new OpenParams(0, 0, OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE));
-		var directoryOpen = new Open(backend.fileId(), backend, session, treeConnect, "", 0);
+		var directoryOpen = new Open(backend.fileId(), backend, session, treeConnect, "", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(directoryOpen.fileId, directoryOpen);
 
 		var response = handler.flush(buildFlushRequest(directoryOpen.fileId));

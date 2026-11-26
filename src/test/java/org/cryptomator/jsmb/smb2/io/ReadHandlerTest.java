@@ -6,6 +6,7 @@ import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.SmbOpen;
 import org.cryptomator.jsmb.share.nio.NioShare;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -53,7 +54,7 @@ class ReadHandlerTest {
 		Files.writeString(shareRoot.resolve("data.bin"), "hello-world-12345");
 		SmbOpen backend = share.open("data.bin",
 				new OpenParams(0x00120089, 0x00000007, OpenParams.Disposition.OPEN, 0));
-		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "data.bin", 0);
+		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "data.bin", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(fileOpen.fileId, fileOpen);
 	}
 
@@ -66,6 +67,16 @@ class ReadHandlerTest {
 		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
 		byte[] data = response.segment().asSlice(ReadResponse.FIXED_PORTION_SIZE, 17).toArray(Layouts.BYTE);
 		Assertions.assertEquals("hello-world-12345", new String(data));
+	}
+
+	@Test
+	@DisplayName("READ on an open without FILE_READ_DATA returns STATUS_ACCESS_DENIED")
+	void readWithoutReadAccess() {
+		session.openTable.put(fileOpen.fileId, new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "data.bin", 0, AccessMask.FILE_WRITE_DATA | AccessMask.FILE_READ_ATTRIBUTES));
+
+		var response = handler.read(buildReadRequest(fileOpen.fileId, 0, 17, 0));
+
+		Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, response.header().status());
 	}
 
 	@Test

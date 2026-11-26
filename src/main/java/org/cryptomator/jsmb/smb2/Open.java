@@ -37,6 +37,14 @@ public class Open {
 	public final int createOptions;
 
 	/**
+	 * The rights the client holds on the open, which requests on it are checked against. Made up of {@link AccessMask} bits other than the generic ones.
+	 * <p>
+	 * MS-SMB2 3.3.5.9 has {@code Open.GrantedAccess} be all rights for a share without {@code ConnectSecurity} and leaves it to the object store
+	 * to hold the client to what it asked for (MS-FSA 2.1.5.1). There is no such object store beneath this server, so this is the latter's notion of granted access.
+	 */
+	public final int grantedAccess;
+
+	/**
 	 * Cached snapshot of the directory listing for the current {@code QUERY_DIRECTORY} enumeration.
 	 * {@code null} until the first {@code QUERY_DIRECTORY} on this Open; repopulated on
 	 * {@code SL_RESTART_SCAN} / {@code SL_REOPEN}.
@@ -46,7 +54,7 @@ public class Open {
 	/** Cursor into {@link #directoryEntries} — next index to return. */
 	public int nextDirectoryIndex;
 
-	// TODO: populate more Per-Open fields as later milestones need them (oplock, lease, granted access, etc.)
+	// TODO: populate more Per-Open fields as later milestones need them (oplock, lease, etc.)
 
 	/**
 	 * @param fileId        the identifier the client refers to the open by
@@ -55,14 +63,26 @@ public class Open {
 	 * @param treeConnect   the tree connect the open was created on
 	 * @param path          forward-slash delimited path relative to the share root
 	 * @param createOptions the {@code CreateOptions} of the CREATE request
+	 * @param grantedAccess the rights the client holds on the open, see {@link AccessMask#grantedFor(int)}
 	 */
-	public Open(FileId fileId, SmbOpen backend, Session session, TreeConnect treeConnect, String path, int createOptions) {
+	public Open(FileId fileId, SmbOpen backend, Session session, TreeConnect treeConnect, String path, int createOptions, int grantedAccess) {
 		this.fileId = fileId;
 		this.backend = backend;
 		this.session = session;
 		this.treeConnect = treeConnect;
 		this.path = path;
 		this.createOptions = createOptions;
+		this.grantedAccess = grantedAccess;
+	}
+
+	/**
+	 * Tells whether the client holds certain rights on the open.
+	 *
+	 * @param access one or more {@link AccessMask} bits
+	 * @return {@code true} if all of them are granted
+	 */
+	public boolean isGranted(int access) {
+		return (grantedAccess & access) == access;
 	}
 
 	/**

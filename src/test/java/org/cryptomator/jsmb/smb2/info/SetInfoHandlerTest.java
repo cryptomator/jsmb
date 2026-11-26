@@ -6,6 +6,7 @@ import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.SmbOpen;
 import org.cryptomator.jsmb.share.nio.NioShare;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -62,7 +64,7 @@ class SetInfoHandlerTest {
 		// DELETE | WRITE_DATA — needed for delete and rename
 		SmbOpen backend = share.open("target.bin",
 				new OpenParams(0x00130196, 0x00000007, OpenParams.Disposition.OPEN, 0));
-		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "target.bin", 0);
+		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "target.bin", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(fileOpen.fileId, fileOpen);
 	}
 
@@ -82,6 +84,27 @@ class SetInfoHandlerTest {
 		Assertions.assertFalse(Files.exists(targetFile));
 	}
 
+	@ParameterizedTest(name = "FileInfoClass {0} without {1}")
+	@DisplayName("SET_INFO on an open that lacks the right the info class takes returns STATUS_ACCESS_DENIED")
+	@CsvSource({
+			"4, 0x00000100", // FileBasicInformation, FILE_WRITE_ATTRIBUTES
+			"10, 0x00010000", // FileRenameInformation, DELETE
+			"13, 0x00010000", // FileDispositionInformation, DELETE
+			"20, 0x00000002", // FileEndOfFileInformation, FILE_WRITE_DATA
+	})
+	void withoutRequiredAccess(byte fileInfoClass, int requiredAccess) throws IOException {
+		int grantedAccess = AccessMask.FILE_ALL_ACCESS & ~requiredAccess;
+		session.openTable.put(fileOpen.fileId, new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "target.bin", 0, grantedAccess));
+		byte[] payload = fileInfoClass == 10 ? renamePayload("renamed.bin", true) : new byte[40]; // of a size that fits each of the other classes
+		payload[0] = 1; // a timestamp, DeletePending or a file size, any of which would change something
+
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, fileInfoClass, payload));
+
+		Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, response.header().status());
+		Assertions.assertEquals("content", Files.readString(targetFile));
+		Assertions.assertFalse(fileOpen.backend.queryStandard().deletePending());
+	}
+
 	@Test
 	@DisplayName("FileDispositionInformation with DeletePending=0 calls off a pending deletion")
 	void dispositionKeep() throws IOException {
@@ -98,7 +121,7 @@ class SetInfoHandlerTest {
 	@Test
 	@DisplayName("FileDispositionInformation with DeletePending=0 doesn't call off FILE_DELETE_ON_CLOSE")
 	void dispositionKeepOnDeleteOnCloseOpen() {
-		var deleteOnClose = new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "target.bin", OpenParams.OPTION_DELETE_ON_CLOSE);
+		var deleteOnClose = new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "target.bin", OpenParams.OPTION_DELETE_ON_CLOSE, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(deleteOnClose.fileId, deleteOnClose);
 
 		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 13, new byte[]{0}));
@@ -114,7 +137,7 @@ class SetInfoHandlerTest {
 		Files.createDirectory(shareRoot.resolve("full"));
 		Files.createFile(shareRoot.resolve("full/child.txt"));
 		SmbOpen backend = treeConnect.share().open("full", new OpenParams(0x00110081, 0x00000007, OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE));
-		var directoryOpen = new Open(backend.fileId(), backend, session, treeConnect, "full", 0);
+		var directoryOpen = new Open(backend.fileId(), backend, session, treeConnect, "full", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(directoryOpen.fileId, directoryOpen);
 
 		var response = handler.set(buildRequestForFileId(directoryOpen.fileId, SetInfoRequest.INFO_TYPE_FILE, (byte) 13, new byte[]{1}));

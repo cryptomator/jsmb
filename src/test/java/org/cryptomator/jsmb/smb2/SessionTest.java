@@ -40,7 +40,7 @@ class SessionTest {
 		Files.writeString(shareRoot.resolve("pending.txt"), "content");
 		var backend = share.open("pending.txt", new OpenParams(0x00130089, 0x00000007, OpenParams.Disposition.OPEN, 0));
 		backend.setDeletePending(true);
-		session.openTable.put(backend.fileId(), new Open(backend.fileId(), backend, session, treeConnect, "pending.txt", 0));
+		session.openTable.put(backend.fileId(), new Open(backend.fileId(), backend, session, treeConnect, "pending.txt", 0, AccessMask.FILE_ALL_ACCESS));
 
 		session.remove();
 

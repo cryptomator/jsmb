@@ -5,6 +5,7 @@ import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.nio.NioShare;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -249,6 +250,30 @@ class CreateHandlerTest {
 		}
 
 		@Test
+		@DisplayName("CREATE with FILE_DELETE_ON_CLOSE but without DELETE in DesiredAccess returns STATUS_INVALID_PARAMETER")
+		void deleteOnCloseWithoutDeleteAccess() {
+			var request = buildCreateRequest("doomed.txt", OpenParams.Disposition.CREATE, OpenParams.OPTION_DELETE_ON_CLOSE);
+			request.segment().set(Layouts.LE_INT32, 24, AccessMask.GENERIC_WRITE);
+
+			var response = handler.create(request);
+
+			Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+			Assertions.assertFalse(Files.exists(shareRoot.resolve("doomed.txt")));
+		}
+
+		@Test
+		@DisplayName("CREATE grants the open the rights that DesiredAccess asks for")
+		void grantedAccess() {
+			var request = buildCreateRequest("new.txt", OpenParams.Disposition.CREATE, 0);
+			request.segment().set(Layouts.LE_INT32, 24, AccessMask.GENERIC_READ | AccessMask.DELETE);
+
+			handler.create(request);
+
+			var open = session.openTable.values().iterator().next();
+			Assertions.assertEquals(0x00130089, open.grantedAccess);
+		}
+
+		@Test
 		@DisplayName("CREATE with FILE_DELETE_ON_CLOSE on a directory with entries succeeds, and CLOSE leaves the directory in place")
 		void deleteOnCloseKeepsNonEmptyDirectory() throws IOException {
 			Files.createDirectory(shareRoot.resolve("full"));
@@ -376,7 +401,7 @@ class CreateHandlerTest {
 
 		var bodySeg = MemorySegment.ofArray(new byte[56 + nameBytes.length]);
 		bodySeg.set(Layouts.LE_UINT16, 0, (char) 57);
-		bodySeg.set(Layouts.LE_INT32, 24, 0x00120089); // DesiredAccess
+		bodySeg.set(Layouts.LE_INT32, 24, AccessMask.FILE_ALL_ACCESS); // DesiredAccess
 		bodySeg.set(Layouts.LE_INT32, 32, 0x00000007); // ShareAccess
 		bodySeg.set(Layouts.LE_INT32, 36, dispositionWireValue(disposition));
 		bodySeg.set(Layouts.LE_INT32, 40, createOptions);

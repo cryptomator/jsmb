@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2.io;
 
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.SmbFile;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -36,6 +37,10 @@ public record ReadHandler(Connection connection) {
 		if (!(open.backend instanceof SmbFile file)) {
 			// READ on a directory handle — spec (MS-SMB2 3.3.5.12) has the server reject this.
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_DEVICE_REQUEST);
+		}
+		// MS-SMB2 3.3.5.12: "If Open.GrantedAccess does not allow for FILE_READ_DATA, the request MUST be failed with STATUS_ACCESS_DENIED."
+		if (!open.isGranted(AccessMask.FILE_READ_DATA)) {
+			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
 
 		int requested = request.length();

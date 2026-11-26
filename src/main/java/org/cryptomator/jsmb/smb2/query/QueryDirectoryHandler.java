@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2.query;
 
 import org.cryptomator.jsmb.common.NTStatus;
 import org.cryptomator.jsmb.share.SmbDirectory;
+import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
@@ -38,6 +39,10 @@ public record QueryDirectoryHandler(Connection connection) {
 		if (!(open.backend instanceof SmbDirectory directory)) {
 			// QUERY_DIRECTORY on a file handle — MS-SMB2 3.3.5.18 has the server reject this.
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
+		}
+		// MS-SMB2 3.3.5.18: "If Open.GrantedAccess does not include FILE_LIST_DIRECTORY, the operation MUST be failed with STATUS_ACCESS_DENIED."
+		if (!open.isGranted(AccessMask.FILE_LIST_DIRECTORY)) {
+			return ErrorResponse.create(request, NTStatus.STATUS_ACCESS_DENIED);
 		}
 		// MS-SMB2 3.3.5.18: "If OutputBufferLength is greater than Connection.MaxTransactSize, the server SHOULD fail the request with STATUS_INVALID_PARAMETER."
 		// This also keeps the client from dictating how much memory gets allocated for the response.
