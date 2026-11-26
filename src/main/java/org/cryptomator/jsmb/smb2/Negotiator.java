@@ -285,18 +285,17 @@ public record Negotiator(Server server, Connection connection) {
 			}
 		}
 		assert session != null;
-		if (session.state == Session.State.EXPIRED) { //Step 5
-			//See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
+		// Steps 5 and 6: reauthenticating an existing session, see https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
+		// A valid session stays valid while it is being reauthenticated, so the client can keep using it in the meantime.
+		// (No session ever expires here: NTLM states no expiration time, which makes Session.ExpirationTime "infinity".)
+		if (session.state == Session.State.EXPIRED) {
 			session.state = Session.State.IN_PROGRESS;
 			session.securityContext = null;
-			return gssAuthenticate(request, session, grantedCredits); //TODO Handle reauthentication in gssAuthenticate
-		} else if (session.state == Session.State.VALID) { //Step 6
-			//See: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ecc02fb-0e60-4cba-afeb-f13100a6e65e
-			//TODO Handle reauthentication in gssAuthenticate. Until then, reject the request and keep the session as is.
-			return ErrorResponse.create(request, NTStatus.STATUS_NOT_SUPPORTED);
-		} else { //Step 7
-			return gssAuthenticate(request, session, grantedCredits);
 		}
+		if (session.ntlmSession instanceof NtlmSession.Authenticated) {
+			session.ntlmSession = NtlmSession.create(); // the first leg of a reauthentication starts the exchange over
+		}
+		return gssAuthenticate(request, session, grantedCredits); // step 7
 	}
 
 	//https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654
@@ -316,6 +315,9 @@ public record Negotiator(Server server, Connection connection) {
 		header.messageId(request.header().messageId());
 		header.treeId(0);
 		header.sessionId(session.sessionId);
+		// "Note that the existing Session.SessionKey will be retained": having one is what tells a reauthentication from a first authentication.
+		// None of the keys get derived anew then, and the preauth integrity hash, which only serves to derive them, is left alone.
+		boolean reauthentication = session.sessionKey != null;
 
 		try {
 			// MS-SMB2 delegates the security buffer to GSS-API (§3.3.5.5.3 "Handling GSS-API
@@ -340,14 +342,18 @@ public record Negotiator(Server server, Connection connection) {
 					session.ntlmSession = awaitingAuthentication;
 
 					var fullResponse = response.withSecurityBuffer(outboundSecurityBuffer);
-					var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
-					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
-					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, fullResponse.serialize()));
+					if (!reauthentication) {
+						var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
+						session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
+						session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, fullResponse.serialize()));
+					}
 					return fullResponse;
 				}
 				case NtlmSession.AwaitingAuthentication s -> {
-					var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
-					session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
+					if (!reauthentication) {
+						var preAuthHashAlgorithm = HashAlgorithm.lookup(connection.preauthIntegrityHashId);
+						session.preauthIntegrityHashValue = preAuthHashAlgorithm.compute(Bytes.concat(session.preauthIntegrityHashValue, request.serialize()));
+					}
 
 					// NTLMv2 validates by recomputing the response hash from (password, user, domain). If the client
 					// sent a different user or domain than the one this server was started with, the hash mismatches
@@ -357,23 +363,29 @@ public record Negotiator(Server server, Connection connection) {
 					header.status(NTStatus.STATUS_SUCCESS);
 					// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/5ed93f06-a1d2-4837-8954-fa8b833c2654
 					session.ntlmSession = authenticated;
-					session.sessionKey = authenticated.exportedSessionKey(); // step 6
-					session.fullSessionKey = session.sessionKey;
-					session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
-					session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
-					int cipherKeyLength = switch (connection.cipherId) {
-						case EncryptionCapabilities.AES_256_CCM, EncryptionCapabilities.AES_256_GCM -> 32;
-						default -> 16;
-					};
-					session.encryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBS2CCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
-					session.decryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBC2SCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
+					// Step 3. The one account this server knows is the only user there can be, so its name stands for the security context.
+					session.userName = creds.domain() + "\\" + creds.user();
+					session.securityContext = session.userName;
+					if (!reauthentication) {
+						session.sessionKey = authenticated.exportedSessionKey(); // step 6: "[...] store the session key in Session.SessionKey, if Session.SessionKey is NULL"
+						session.fullSessionKey = session.sessionKey;
+						session.signingKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBSigningKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 7
+						session.applicationKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBAppKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, 16); // step 8
+						int cipherKeyLength = switch (connection.cipherId) {
+							case EncryptionCapabilities.AES_256_CCM, EncryptionCapabilities.AES_256_GCM -> 32;
+							default -> 16;
+						};
+						session.encryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBS2CCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
+						session.decryptionKey = NistSP800108KDF.withHmacSha256(session.sessionKey, "SMBC2SCipherKey\0".getBytes(StandardCharsets.US_ASCII), session.preauthIntegrityHashValue, cipherKeyLength); // step 11
+					}
 					// step 10, with one deviation: the spec encrypts only if RejectUnencryptedAccess is TRUE, whereas this server encrypts whenever a cipher got negotiated.
 					// RejectUnencryptedAccess merely decides whether clients without a cipher are let in at all, see sessionSetup.
 					session.encryptData = connection.global.encryptData && connection.cipherId != EncryptionCapabilities.NO_COMMON_CIPHER;
 					// step 10's "Otherwise, set Session.SigningRequired to TRUE", which supersedes step 5. Clients get told so in the NEGOTIATE response, as RequireMessageSigning is always TRUE.
 					session.signingRequired = !session.encryptData;
+					removePreviousSession(request.previousSessionId(), session); // step 13
 					session.state = Session.State.VALID; // step 14
-					if (connection.global.debugEncryption) {
+					if (connection.global.debugEncryption && !reauthentication) {
 						logSessionKeys(session);
 					}
 					var response = new SessionSetupResponse(header.build());
@@ -398,11 +410,28 @@ public record Negotiator(Server server, Connection connection) {
 			session.remove();
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
 		} catch (NTStatusException e) {
-			// TODO log?
-			// "If the authentication protocol indicates an error, [...] the server MUST remove the session object from GlobalSessionTable and Connection.SessionTable".
-			// Opens and tree connects need no cleanup, as a session that is still InProgress can't have any.
+			// "If the authentication protocol indicates an error, [...] the server MUST remove the session object from GlobalSessionTable and Connection.SessionTable",
+			// close its opens and deregister its tree connects. That goes for a failed reauthentication as well, which thereby ends a session that was valid.
+			LOG.debug("Authentication failed for session {}", session.sessionId);
 			session.remove();
 			return ErrorResponse.create(request, e.status);
+		}
+	}
+
+	// Step 13: a client that lost its connection names the session it had on it, so that what that session left behind doesn't linger until the server notices the loss itself.
+	private void removePreviousSession(long previousSessionId, Session session) {
+		if (previousSessionId == 0 || previousSessionId == session.sessionId) {
+			return; // "the server SHOULD ignore PreviousSessionId" that names the session being set up
+		}
+		var previous = connection.global.sessionTable.get(previousSessionId);
+		if (previous == null) {
+			return; // "If no session is found, no other processing is necessary."
+		}
+		// "[...] created by the same user by comparing the user identifiers obtained from the Session.SecurityContext on the new and old session."
+		// A session that never got authenticated has none, and therefore is nobody's to remove.
+		if (previous.securityContext != null && previous.securityContext.equals(session.securityContext)) {
+			LOG.debug("Session {} replaces session {}", session.sessionId, previousSessionId);
+			previous.remove();
 		}
 	}
 

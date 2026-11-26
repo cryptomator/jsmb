@@ -4,9 +4,9 @@ import org.cryptomator.jsmb.smb2.negotiate.PreauthIntegrityCapabilities;
 import org.cryptomator.jsmb.smb2.negotiate.SigningCapabilities;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Connection parameters negotiated during the SMB2.0 dialect negotiation.
@@ -45,5 +45,6 @@ public class Connection {
 
 	public char serverSecurityMode;
 
-	public Map<Long, Session> sessionTable = HashMap.newHashMap(1);
+	// Concurrent, as a session may get removed by another connection's thread: the one that sets up the session replacing it (PreviousSessionId).
+	public Map<Long, Session> sessionTable = new ConcurrentHashMap<>(1);
 }

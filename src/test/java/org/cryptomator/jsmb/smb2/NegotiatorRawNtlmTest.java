@@ -12,7 +12,19 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.NameCallback;
+import javax.security.auth.callback.PasswordCallback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.sasl.RealmCallback;
+import javax.security.sasl.Sasl;
+import javax.security.sasl.SaslClient;
+import javax.security.sasl.SaslException;
+import java.util.Map;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -102,19 +114,172 @@ class NegotiatorRawNtlmTest {
 		Assertions.assertFalse(server.global.sessionTable.containsKey(sessionId));
 	}
 
-	@Test
-	@DisplayName("SESSION_SETUP on an already authenticated session is rejected with STATUS_NOT_SUPPORTED and leaves the session intact")
-	void reauthenticationNotSupported() {
-		var session = Session.create(connection);
-		session.state = Session.State.VALID;
-		var request = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, session.sessionId, 1L);
+	@Nested
+	@DisplayName("Reauthentication")
+	class Reauthentication {
 
-		var response = negotiator.sessionSetup(request, 1);
+		private Session session;
 
-		Assertions.assertInstanceOf(ErrorResponse.class, response);
-		Assertions.assertEquals(NTStatus.STATUS_NOT_SUPPORTED, response.header().status());
-		Assertions.assertSame(session, connection.sessionTable.get(session.sessionId));
-		Assertions.assertEquals(Session.State.VALID, session.state);
+		@BeforeEach
+		void authenticate() throws SaslException {
+			var response = NegotiatorRawNtlmTest.authenticate(negotiator, 0L, 0L);
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			session = connection.sessionTable.get(response.header().sessionId());
+			session.treeConnectTable.put(1, new TreeConnect(1, "data", null, 0));
+		}
+
+		@Test
+		@DisplayName("Reauthenticating a valid session succeeds and leaves its keys and tree connects as they are")
+		void reauthenticateValidSession() throws SaslException {
+			byte[] sessionKey = session.sessionKey;
+			byte[] signingKey = session.signingKey;
+			byte[] encryptionKey = session.encryptionKey;
+			byte[] decryptionKey = session.decryptionKey;
+			byte[] preauthIntegrityHashValue = session.preauthIntegrityHashValue;
+
+			var response = NegotiatorRawNtlmTest.authenticate(negotiator, session.sessionId, 0L);
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			Assertions.assertEquals(session.sessionId, response.header().sessionId());
+			Assertions.assertSame(session, connection.sessionTable.get(session.sessionId));
+			Assertions.assertEquals(Session.State.VALID, session.state);
+			Assertions.assertSame(sessionKey, session.sessionKey);
+			Assertions.assertSame(signingKey, session.signingKey);
+			Assertions.assertSame(encryptionKey, session.encryptionKey);
+			Assertions.assertSame(decryptionKey, session.decryptionKey);
+			Assertions.assertSame(preauthIntegrityHashValue, session.preauthIntegrityHashValue);
+			Assertions.assertEquals(1, session.treeConnectTable.size());
+		}
+
+		@Test
+		@DisplayName("A session stays valid between the two legs of its reauthentication")
+		void validWhileReauthenticating() {
+			var response = negotiator.sessionSetup(buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, session.sessionId, 0L, 3L), 1);
+
+			Assertions.assertEquals(NTStatus.STATUS_MORE_PROCESSING_REQUIRED, response.header().status());
+			Assertions.assertEquals(Session.State.VALID, session.state);
+		}
+
+		@Test
+		@DisplayName("Reauthenticating an expired session makes it valid again and leaves its keys as they are")
+		void reauthenticateExpiredSession() throws SaslException {
+			byte[] sessionKey = session.sessionKey;
+			session.state = Session.State.EXPIRED;
+
+			var response = NegotiatorRawNtlmTest.authenticate(negotiator, session.sessionId, 0L);
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			Assertions.assertEquals(Session.State.VALID, session.state);
+			Assertions.assertSame(sessionKey, session.sessionKey);
+		}
+
+		@Test
+		@DisplayName("A failed reauthentication removes the session along with its tree connects")
+		void failedReauthentication() {
+			negotiator.sessionSetup(buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, session.sessionId, 0L, 3L), 1);
+			// a NEGOTIATE_MESSAGE where the AUTHENTICATE_MESSAGE is due
+			var secondLeg = buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, session.sessionId, 0L, 4L);
+
+			var response = negotiator.sessionSetup(secondLeg, 1);
+
+			Assertions.assertInstanceOf(ErrorResponse.class, response);
+			Assertions.assertFalse(connection.sessionTable.containsKey(session.sessionId));
+			Assertions.assertFalse(server.global.sessionTable.containsKey(session.sessionId));
+			Assertions.assertTrue(session.treeConnectTable.isEmpty());
+		}
+
+		@Test
+		@DisplayName("A PreviousSessionId that names the session being reauthenticated is ignored")
+		void previousSessionIdNamingItself() throws SaslException {
+			var response = NegotiatorRawNtlmTest.authenticate(negotiator, session.sessionId, session.sessionId);
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			Assertions.assertSame(session, server.global.sessionTable.get(session.sessionId));
+			Assertions.assertEquals(1, session.treeConnectTable.size());
+		}
+	}
+
+	@Nested
+	@DisplayName("PreviousSessionId")
+	class PreviousSessionId {
+
+		private Connection newConnection;
+		private Negotiator newNegotiator;
+
+		@BeforeEach
+		void reconnect() {
+			newConnection = negotiatedConnection(server);
+			newNegotiator = new Negotiator(server, newConnection);
+		}
+
+		@Test
+		@DisplayName("A new session of the same user removes the previous session it names, along with its tree connects")
+		void sameUser() throws SaslException {
+			long previousSessionId = NegotiatorRawNtlmTest.authenticate(negotiator, 0L, 0L).header().sessionId();
+			var previous = connection.sessionTable.get(previousSessionId);
+			previous.treeConnectTable.put(1, new TreeConnect(1, "data", null, 0));
+
+			var response = NegotiatorRawNtlmTest.authenticate(newNegotiator, 0L, previousSessionId);
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			Assertions.assertFalse(connection.sessionTable.containsKey(previousSessionId));
+			Assertions.assertFalse(server.global.sessionTable.containsKey(previousSessionId));
+			Assertions.assertTrue(previous.treeConnectTable.isEmpty());
+			Assertions.assertEquals(Session.State.VALID, newConnection.sessionTable.get(response.header().sessionId()).state);
+		}
+
+		@Test
+		@DisplayName("A previous session that never got authenticated is left alone")
+		void unauthenticatedPreviousSession() throws SaslException {
+			long previousSessionId = negotiator.sessionSetup(buildSessionSetupRequest(LINUX_CIFS_NEGOTIATE_BLOB, 0L, 1L), 1).header().sessionId();
+
+			var response = NegotiatorRawNtlmTest.authenticate(newNegotiator, 0L, previousSessionId);
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			Assertions.assertTrue(connection.sessionTable.containsKey(previousSessionId));
+			Assertions.assertTrue(server.global.sessionTable.containsKey(previousSessionId));
+		}
+
+		@Test
+		@DisplayName("A previous session of another user is left alone")
+		void otherUser() throws SaslException {
+			long previousSessionId = NegotiatorRawNtlmTest.authenticate(negotiator, 0L, 0L).header().sessionId();
+			connection.sessionTable.get(previousSessionId).securityContext = "DOMAIN\\someone-else";
+
+			var response = NegotiatorRawNtlmTest.authenticate(newNegotiator, 0L, previousSessionId);
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			Assertions.assertTrue(server.global.sessionTable.containsKey(previousSessionId));
+		}
+
+		@Test
+		@DisplayName("A PreviousSessionId that names no session is ignored")
+		void unknownPreviousSession() throws SaslException {
+			var response = NegotiatorRawNtlmTest.authenticate(newNegotiator, 0L, 0x7777L);
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+		}
+	}
+
+	// Runs both legs of an NTLM authentication against the negotiator, with the JDK's SASL mechanism in the role of the client. Returns the response to the second leg.
+	private static SMB2Message authenticate(Negotiator negotiator, long sessionId, long previousSessionId) throws SaslException {
+		Map<String, ?> props = Map.of("com.sun.security.sasl.ntlm.version", "LMv2/NTLMv2", "com.sun.security.sasl.ntlm.domain", "DOMAIN");
+		CallbackHandler callbackHandler = callbacks -> {
+			for (Callback callback : callbacks) {
+				switch (callback) {
+					case PasswordCallback pc -> pc.setPassword("password".toCharArray());
+					case NameCallback nc -> nc.setName("user");
+					case RealmCallback rc -> rc.setText("DOMAIN");
+					default -> throw new UnsupportedCallbackException(callback);
+				}
+			}
+		};
+		SaslClient client = Sasl.createSaslClient(new String[]{"NTLM"}, "user", "jsmb", "localhost", props, callbackHandler);
+		byte[] negotiateMessage = client.evaluateChallenge(new byte[0]);
+		var challenge = negotiator.sessionSetup(buildSessionSetupRequest(negotiateMessage, sessionId, previousSessionId, 1L), 1);
+		Assertions.assertEquals(NTStatus.STATUS_MORE_PROCESSING_REQUIRED, challenge.header().status());
+		byte[] authenticateMessage = client.evaluateChallenge(extractSecurityBuffer((SessionSetupResponse) challenge));
+		return negotiator.sessionSetup(buildSessionSetupRequest(authenticateMessage, challenge.header().sessionId(), previousSessionId, 2L), 1);
 	}
 
 	@Test
@@ -153,6 +318,10 @@ class NegotiatorRawNtlmTest {
 	}
 
 	private static SessionSetupRequest buildSessionSetupRequest(byte[] securityBlob, long sessionId, long messageId) {
+		return buildSessionSetupRequest(securityBlob, sessionId, 0L, messageId);
+	}
+
+	private static SessionSetupRequest buildSessionSetupRequest(byte[] securityBlob, long sessionId, long previousSessionId, long messageId) {
 		var headerSeg = MemorySegment.ofArray(new byte[PacketHeader.STRUCTURE_SIZE]);
 		headerSeg.set(Layouts.LE_INT32, 0, SMB2Message.PROTOCOL_ID);
 		headerSeg.set(Layouts.LE_UINT16, 4, PacketHeader.STRUCTURE_SIZE);
@@ -169,7 +338,7 @@ class NegotiatorRawNtlmTest {
 		bodySeg.set(Layouts.LE_INT32, 8, 0);          // Channel
 		bodySeg.set(Layouts.LE_UINT16, 12, (char) (PacketHeader.STRUCTURE_SIZE + 24)); // SecurityBufferOffset
 		bodySeg.set(Layouts.LE_UINT16, 14, (char) securityBlob.length); // SecurityBufferLength
-		bodySeg.set(Layouts.LE_INT64, 16, 0L);        // PreviousSessionId
+		bodySeg.set(Layouts.LE_INT64, 16, previousSessionId);
 		MemorySegment.copy(MemorySegment.ofArray(securityBlob), 0, bodySeg, 24, securityBlob.length);
 
 		return new SessionSetupRequest(new PacketHeader(headerSeg), bodySeg);

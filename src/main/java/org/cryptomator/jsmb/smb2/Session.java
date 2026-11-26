@@ -8,9 +8,9 @@ import org.jetbrains.annotations.Range;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -46,10 +46,13 @@ public class Session {
 	public int sessionGlobalId;
 	public State state = State.IN_PROGRESS;
 	public Object securityContext = null; // TODO adjust type
+	/** The name of the user who established the session, {@code null} until it got authenticated. */
+	public String userName = null;
 	public byte[] sessionKey = null;
 	public boolean signingRequired = false;
-	public Map<FileId, Open> openTable = new HashMap<>();
-	public Map<Integer, TreeConnect> treeConnectTable = new HashMap<>();
+	// Concurrent, as a session may get removed by another connection's thread: the one that sets up the session replacing it (PreviousSessionId).
+	public Map<FileId, Open> openTable = new ConcurrentHashMap<>();
+	public Map<Integer, TreeConnect> treeConnectTable = new ConcurrentHashMap<>();
 	/** Generator for per-session {@code TreeId}s. MS-SMB2 requires uniqueness within a session; 0 and 0xFFFFFFFF are reserved. */
 	public final AtomicInteger nextTreeId = new AtomicInteger(1);
 	public boolean isAnonymous = false;
