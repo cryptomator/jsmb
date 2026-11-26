@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./mvnw test *)",
+      "Bash(./mvnw clean *)",
+      "Bash(./mvnw -q compile)",
+      "Bash(./mvnw -q test-compile)",
+      "Bash(./mvnw verify *)",
+      "Bash(./mvnw compile *)",
+      "Bash(.claude/skills/interop-scenario/run.sh *)",
+      "Bash(.claude/skills/macos-client-test/start.sh)",
+      "Bash(.claude/skills/macos-client-test/stop.sh *)",
+      "Skill(interop-scenario)",
+      "Skill(interop-scenario *)",
+      "Skill(macos-client-test)"
+    ]
+  },
+  "sandbox": {
+    "excludedCommands": [
+      ".claude/skills/interop-scenario/run.sh *",
+      ".claude/skills/macos-client-test/start.sh",
+      ".claude/skills/macos-client-test/stop.sh *"
+    ]
+  }
+}
