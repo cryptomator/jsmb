@@ -110,8 +110,18 @@ A backend without it still gets (1). Reporting only (1) is a common compromise, 
 
 ## Smaller gaps
 
-Seen in the same session; each is a refusal that clients tolerate.
+### Seen with the macOS client
+
+Each is a refusal that clients tolerate.
 
 - `QUERY_INFO` with `InfoType` security or quota: `STATUS_NOT_SUPPORTED`. 419 requests, about one per file that gets copied.
 - `SET_INFO` with `FileAllocationInformation`: `STATUS_INVALID_INFO_CLASS`. macOS uses it to preallocate before a copy.
 - FSCTL `0x00140078` during mount: `STATUS_INVALID_DEVICE_REQUEST`.
+
+### Left open by the MS-SMB2 audit
+
+Noted while working through the audit's findings (numbers in parentheses) and not implemented. No client was seen to depend on any of them.
+
+- **"Don't update this timestamp" in `FileBasicInformation` (#1).** A FILETIME of `-1` tells the server to stop updating that timestamp implicitly for further operations on the handle, `-2` to resume (MS-FSCC 2.4.7). `SetInfoHandler.readFileTime` treats both like `0`, i.e. "leave the stored value alone", and the timestamp keeps following writes. Implicit updates are the backend's doing, so this takes an SPI addition, e.g. a flag per timestamp in `SmbOpen.setBasic`.
+- **Error data on `STATUS_INFO_LENGTH_MISMATCH` (#18).** When a `QUERY_INFO` buffer is too small for the fixed part of an info class, the error response is meant to carry error data (`ByteCount` 8) instead of the empty one sent now. `ErrorResponse` can't hold error data yet (section 2.2.2). Check 3.3.5.20.1 for what exactly goes into it.
+- **Validation of `FileAttributes` and `ImpersonationLevel` in `CREATE` (#22).** `FileAttributes` must be a combination of the values in MS-FSCC 2.6, anything else is `STATUS_INVALID_PARAMETER` (MS-FSA 2.1.5.1). `ImpersonationLevel` must be one of the four values in section 2.2.13. Both are passed on respectively ignored unchecked. The list of valid attribute bits has to be taken from MS-FSCC first; guessing it risks locking out a client that sets a bit jSMB doesn't know.
