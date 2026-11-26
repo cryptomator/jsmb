@@ -109,17 +109,16 @@ public record SetInfoHandler(Connection connection) {
 	}
 
 	/**
-	 * MS-FSCC 2.4.11 — 1 byte. {@code DeletePending != 0} flags the open for unlink on CLOSE.
+	 * MS-FSCC 2.4.11 — 1 byte. {@code DeletePending != 0} flags the open for unlink on CLOSE, {@code 0} takes the flag back.
+	 * Whether the target may be deleted is up to the backend (MS-FSA 2.1.5.15.3); its refusal is mapped to a status by the caller.
 	 */
-	private int applyDisposition(Open open, MemorySegment buffer) {
+	private int applyDisposition(Open open, MemorySegment buffer) throws IOException {
 		if (buffer.byteSize() < 1) {
 			return NTStatus.STATUS_INFO_LENGTH_MISMATCH;
 		}
 		boolean deletePending = buffer.get(Layouts.BYTE, 0) != 0;
-		if (deletePending) {
-			open.backend.markForDeletion();
-			LOG.debug("SET_INFO fileId={} marked for deletion on close", open.fileId);
-		}
+		open.backend.setDeletePending(deletePending);
+		LOG.debug("SET_INFO fileId={} deletePending={}", open.fileId, deletePending);
 		return NTStatus.STATUS_SUCCESS;
 	}
 

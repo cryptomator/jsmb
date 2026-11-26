@@ -53,7 +53,7 @@ class ReadHandlerTest {
 		Files.writeString(shareRoot.resolve("data.bin"), "hello-world-12345");
 		SmbOpen backend = share.open("data.bin",
 				new OpenParams(0x00120089, 0x00000007, OpenParams.Disposition.OPEN, 0));
-		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "data.bin");
+		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "data.bin", 0);
 		session.openTable.put(fileOpen.fileId, fileOpen);
 	}
 

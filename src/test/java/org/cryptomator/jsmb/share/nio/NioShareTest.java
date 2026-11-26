@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -162,13 +163,38 @@ class NioShareTest {
 		}
 
 		@Test
-		@DisplayName("markForDeletion + close removes the file")
+		@DisplayName("setDeletePending(true) + close removes the file")
 		void deleteOnCloseRemovesFile(@TempDir Path root) throws IOException {
 			var share = new NioShare(root);
 			try (var open = share.open("doomed.txt", CREATE_FILE)) {
-				open.markForDeletion();
+				open.setDeletePending(true);
 			}
 			Assertions.assertFalse(Files.exists(root.resolve("doomed.txt")));
+		}
+
+		@Test
+		@DisplayName("setDeletePending(false) calls off a pending deletion")
+		void deletePendingCanBeCleared(@TempDir Path root) throws IOException {
+			var share = new NioShare(root);
+			try (var open = share.open("spared.txt", CREATE_FILE)) {
+				open.setDeletePending(true);
+				open.setDeletePending(false);
+				Assertions.assertFalse(open.queryStandard().deletePending());
+			}
+			Assertions.assertTrue(Files.exists(root.resolve("spared.txt")));
+		}
+
+		@Test
+		@DisplayName("setDeletePending(true) on a directory with entries throws DirectoryNotEmptyException")
+		void deletePendingOnNonEmptyDirectoryFails(@TempDir Path root) throws IOException {
+			Files.createDirectory(root.resolve("full"));
+			Files.createFile(root.resolve("full/child.txt"));
+			var share = new NioShare(root);
+			try (var open = share.open("full", OPEN_IF_DIR)) {
+				Assertions.assertThrows(DirectoryNotEmptyException.class, () -> open.setDeletePending(true));
+				Assertions.assertFalse(open.queryStandard().deletePending());
+			}
+			Assertions.assertTrue(Files.exists(root.resolve("full")));
 		}
 
 		@Test

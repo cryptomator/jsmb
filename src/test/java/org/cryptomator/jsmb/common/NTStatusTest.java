@@ -69,6 +69,7 @@ class NTStatusTest {
 		Assertions.assertEquals(0xC0000103, IOExceptionWithStatus.Status.NOT_A_DIRECTORY.ntStatus());
 		Assertions.assertEquals(0xC00000BA, IOExceptionWithStatus.Status.FILE_IS_A_DIRECTORY.ntStatus());
 		Assertions.assertEquals(0xC0000101, IOExceptionWithStatus.Status.DIRECTORY_NOT_EMPTY.ntStatus());
+		Assertions.assertEquals(0xC0000121, IOExceptionWithStatus.Status.CANNOT_DELETE.ntStatus());
 		Assertions.assertEquals(0xC0000043, IOExceptionWithStatus.Status.SHARING_VIOLATION.ntStatus());
 		Assertions.assertEquals(0xC000007F, IOExceptionWithStatus.Status.DISK_FULL.ntStatus());
 		Assertions.assertEquals(0xC00000E9, IOExceptionWithStatus.Status.UNEXPECTED_IO_ERROR.ntStatus());

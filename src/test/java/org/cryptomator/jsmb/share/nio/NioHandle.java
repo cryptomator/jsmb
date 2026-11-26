@@ -8,6 +8,7 @@ import org.cryptomator.jsmb.share.SmbFile;
 import org.cryptomator.jsmb.share.SmbOpen;
 
 import java.io.IOException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -44,8 +45,15 @@ abstract class NioHandle {
 		return existedBeforeOpen;
 	}
 
-	public void markForDeletion() {
-		deletePending = true;
+	public void setDeletePending(boolean deletePending) throws IOException {
+		if (deletePending && isDirectory()) {
+			try (var entries = Files.newDirectoryStream(target)) {
+				if (entries.iterator().hasNext()) {
+					throw new DirectoryNotEmptyException(target.toString());
+				}
+			}
+		}
+		this.deletePending = deletePending;
 	}
 
 	public FileBasicInfo queryBasic() throws IOException {

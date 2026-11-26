@@ -47,6 +47,7 @@ public interface NTStatus {
 	int STATUS_FILE_IS_A_DIRECTORY = 0xC00000BA;
 	int STATUS_DIRECTORY_NOT_EMPTY = 0xC0000101;
 	int STATUS_NOT_A_DIRECTORY = 0xC0000103;
+	int STATUS_CANNOT_DELETE = 0xC0000121;
 
 	/**
 	 * Maps a failure reported by a share backend to the status to fail the request with.

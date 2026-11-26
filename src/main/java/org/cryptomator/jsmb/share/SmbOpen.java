@@ -61,9 +61,14 @@ public sealed interface SmbOpen extends AutoCloseable permits SmbFile, SmbDirect
 	void rename(String newPath, boolean replaceIfExists) throws IOException;
 
 	/**
-	 * Mark this open for deletion; the backing file/directory is unlinked when {@link #close()} runs.
+	 * Sets or clears the mark that makes {@link #close()} delete the backing file or directory.
+	 *
+	 * @param deletePending {@code true} to delete on close, {@code false} to call off a deletion requested before
+	 * @throws IOException if the target must not be deleted: a {@link java.nio.file.DirectoryNotEmptyException} for a directory that has entries,
+	 *                     an {@link IOExceptionWithStatus} with {@link IOExceptionWithStatus.Status#CANNOT_DELETE} for a read-only target
+	 * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsa/386d9ec5-e0f6-4853-b175-c05be01419e0">MS-FSA 2.1.5.15.3 FileDispositionInformation</a>
 	 */
-	void markForDeletion();
+	void setDeletePending(boolean deletePending) throws IOException;
 
 	@Override
 	void close() throws IOException;

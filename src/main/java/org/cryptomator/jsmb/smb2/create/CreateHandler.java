@@ -74,10 +74,6 @@ public record CreateHandler(Connection connection) {
 			return ErrorResponse.create(request, NTStatus.STATUS_FILE_IS_A_DIRECTORY);
 		}
 
-		if ((request.createOptions() & OpenParams.OPTION_DELETE_ON_CLOSE) != 0) {
-			backend.markForDeletion();
-		}
-
 		FileBasicInfo basic;
 		FileStandardInfo standard;
 		try {
@@ -93,7 +89,7 @@ public record CreateHandler(Connection connection) {
 		}
 
 		var fileId = backend.fileId();
-		session.openTable.put(fileId, new Open(fileId, backend, session, treeConnect, name));
+		session.openTable.put(fileId, new Open(fileId, backend, session, treeConnect, name, request.createOptions())); // FILE_DELETE_ON_CLOSE takes effect when the open is closed
 		LOG.debug("CREATE '{}' → fileId={}  action={}", name, fileId, disposition);
 
 		var header = buildResponseHeader(request, Command.CREATE, treeConnect.treeId());

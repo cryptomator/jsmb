@@ -37,6 +37,9 @@ public class IOExceptionWithStatus extends IOException {
 		/** The directory can't be removed or replaced, as it has entries. */
 		DIRECTORY_NOT_EMPTY(NTStatus.STATUS_DIRECTORY_NOT_EMPTY),
 
+		/** The file or directory must not be deleted, for example because it is read-only. */
+		CANNOT_DELETE(NTStatus.STATUS_CANNOT_DELETE),
+
 		/** The file is in use in a way that conflicts with the requested access. */
 		SHARING_VIOLATION(NTStatus.STATUS_SHARING_VIOLATION),
 

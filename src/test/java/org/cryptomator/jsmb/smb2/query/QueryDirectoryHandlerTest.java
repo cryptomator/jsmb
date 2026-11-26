@@ -56,7 +56,7 @@ class QueryDirectoryHandlerTest {
 				new org.cryptomator.jsmb.share.OpenParams(0, 0,
 						org.cryptomator.jsmb.share.OpenParams.Disposition.OPEN,
 						org.cryptomator.jsmb.share.OpenParams.OPTION_DIRECTORY_FILE));
-		rootOpen = new Open(backend.fileId(), backend, session, treeConnect, "");
+		rootOpen = new Open(backend.fileId(), backend, session, treeConnect, "", 0);
 		session.openTable.put(rootOpen.fileId, rootOpen);
 	}
 

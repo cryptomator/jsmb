@@ -2,6 +2,7 @@ package org.cryptomator.jsmb.smb2;
 
 import org.cryptomator.jsmb.share.DirEntry;
 import org.cryptomator.jsmb.share.FileId;
+import org.cryptomator.jsmb.share.OpenParams;
 import org.cryptomator.jsmb.share.SmbOpen;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -32,6 +33,9 @@ public class Open {
 	 */
 	public String path;
 
+	/** The {@code CreateOptions} the client opened the file with (MS-SMB2 2.2.13). */
+	public final int createOptions;
+
 	/**
 	 * Cached snapshot of the directory listing for the current {@code QUERY_DIRECTORY} enumeration.
 	 * {@code null} until the first {@code QUERY_DIRECTORY} on this Open; repopulated on
@@ -44,23 +48,40 @@ public class Open {
 
 	// TODO: populate more Per-Open fields as later milestones need them (oplock, lease, granted access, etc.)
 
-	public Open(FileId fileId, SmbOpen backend, Session session, TreeConnect treeConnect, String path) {
+	/**
+	 * @param fileId        the identifier the client refers to the open by
+	 * @param backend       the handle of the share backend
+	 * @param session       the session the open belongs to
+	 * @param treeConnect   the tree connect the open was created on
+	 * @param path          forward-slash delimited path relative to the share root
+	 * @param createOptions the {@code CreateOptions} of the CREATE request
+	 */
+	public Open(FileId fileId, SmbOpen backend, Session session, TreeConnect treeConnect, String path, int createOptions) {
 		this.fileId = fileId;
 		this.backend = backend;
 		this.session = session;
 		this.treeConnect = treeConnect;
 		this.path = path;
+		this.createOptions = createOptions;
 	}
 
 	/**
-	 * Releases the backend handle, as part of closing an open (MS-SMB2 3.3.4.17). A failure to do so is logged and otherwise ignored, as the open is given up either way.
+	 * Releases the backend handle, as part of closing an open (MS-SMB2 3.3.4.17). An open created with {@code FILE_DELETE_ON_CLOSE} has its target deleted,
+	 * unless that is a directory with entries (MS-FSA 2.1.5.5). A failure is logged and otherwise ignored, as the open is given up either way.
 	 * Removing the open from {@code Session.openTable} is up to the caller.
 	 */
 	public void close() {
+		if ((createOptions & OpenParams.OPTION_DELETE_ON_CLOSE) != 0) {
+			try {
+				backend.setDeletePending(true);
+			} catch (IOException e) {
+				LOG.debug("'{}' is not deleted on close", path, e);
+			}
+		}
 		try {
 			backend.close();
 		} catch (IOException e) {
-			LOG.debug("Closing '{}' failed", path, e);
+			LOG.warn("Closing '{}' failed", path, e);
 		}
 	}
 }

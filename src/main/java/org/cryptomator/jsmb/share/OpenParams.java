@@ -59,6 +59,9 @@ public record OpenParams(int desiredAccess,
 	public static final int OPTION_DIRECTORY_FILE = 0x00000001;
 	/** {@code FILE_NON_DIRECTORY_FILE} — the target must not be a directory. */
 	public static final int OPTION_NON_DIRECTORY_FILE = 0x00000040;
-	/** {@code FILE_DELETE_ON_CLOSE} — unlink the target when the open is closed. */
+	/**
+	 * {@code FILE_DELETE_ON_CLOSE} — unlink the target when the open is closed. A backend need not act on it:
+	 * the server calls {@link SmbOpen#setDeletePending(boolean)} right before closing such an open.
+	 */
 	public static final int OPTION_DELETE_ON_CLOSE = 0x00001000;
 }

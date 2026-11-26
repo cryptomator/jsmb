@@ -62,7 +62,7 @@ class SetInfoHandlerTest {
 		// DELETE | WRITE_DATA — needed for delete and rename
 		SmbOpen backend = share.open("target.bin",
 				new OpenParams(0x00130196, 0x00000007, OpenParams.Disposition.OPEN, 0));
-		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "target.bin");
+		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "target.bin", 0);
 		session.openTable.put(fileOpen.fileId, fileOpen);
 	}
 
@@ -73,13 +73,55 @@ class SetInfoHandlerTest {
 
 		Assertions.assertInstanceOf(SetInfoResponse.class, response);
 		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
-		// markForDeletion is recorded on the backend; actually unlinking happens in CLOSE.
+		// The mark is recorded on the backend; actually unlinking happens in CLOSE.
 		Assertions.assertTrue(fileOpen.backend.queryStandard().deletePending());
 		// file still exists until close
 		Assertions.assertTrue(Files.exists(targetFile));
 
 		fileOpen.backend.close();
 		Assertions.assertFalse(Files.exists(targetFile));
+	}
+
+	@Test
+	@DisplayName("FileDispositionInformation with DeletePending=0 calls off a pending deletion")
+	void dispositionKeep() throws IOException {
+		handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 13, new byte[]{1}));
+
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 13, new byte[]{0}));
+
+		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+		Assertions.assertFalse(fileOpen.backend.queryStandard().deletePending());
+		fileOpen.close();
+		Assertions.assertTrue(Files.exists(targetFile));
+	}
+
+	@Test
+	@DisplayName("FileDispositionInformation with DeletePending=0 doesn't call off FILE_DELETE_ON_CLOSE")
+	void dispositionKeepOnDeleteOnCloseOpen() {
+		var deleteOnClose = new Open(fileOpen.fileId, fileOpen.backend, session, treeConnect, "target.bin", OpenParams.OPTION_DELETE_ON_CLOSE);
+		session.openTable.put(deleteOnClose.fileId, deleteOnClose);
+
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 13, new byte[]{0}));
+
+		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+		deleteOnClose.close();
+		Assertions.assertFalse(Files.exists(targetFile));
+	}
+
+	@Test
+	@DisplayName("FileDispositionInformation with DeletePending=1 on a directory with entries returns STATUS_DIRECTORY_NOT_EMPTY")
+	void dispositionDeleteNonEmptyDirectory() throws IOException {
+		Files.createDirectory(shareRoot.resolve("full"));
+		Files.createFile(shareRoot.resolve("full/child.txt"));
+		SmbOpen backend = treeConnect.share().open("full", new OpenParams(0x00110081, 0x00000007, OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE));
+		var directoryOpen = new Open(backend.fileId(), backend, session, treeConnect, "full", 0);
+		session.openTable.put(directoryOpen.fileId, directoryOpen);
+
+		var response = handler.set(buildRequestForFileId(directoryOpen.fileId, SetInfoRequest.INFO_TYPE_FILE, (byte) 13, new byte[]{1}));
+
+		Assertions.assertEquals(NTStatus.STATUS_DIRECTORY_NOT_EMPTY, response.header().status());
+		directoryOpen.close();
+		Assertions.assertTrue(Files.exists(shareRoot.resolve("full")));
 	}
 
 	@Test

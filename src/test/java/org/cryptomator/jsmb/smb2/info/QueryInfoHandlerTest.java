@@ -60,7 +60,7 @@ class QueryInfoHandlerTest {
 		Files.writeString(shareRoot.resolve("demo.txt"), "hello");
 		var backend = share.open("demo.txt",
 				new OpenParams(0, 0, OpenParams.Disposition.OPEN, 0));
-		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "demo.txt");
+		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "demo.txt", 0);
 		session.openTable.put(fileOpen.fileId, fileOpen);
 	}
 

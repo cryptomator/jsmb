@@ -147,15 +147,31 @@ class CreateHandlerTest {
 		}
 
 		@Test
-		@DisplayName("CREATE with FILE_DELETE_ON_CLOSE marks the backend for deletion")
+		@DisplayName("CREATE with FILE_DELETE_ON_CLOSE deletes the file on CLOSE")
 		void deleteOnCloseRemovesOnClose() {
 			var createResp = handler.create(buildCreateRequest("doomed.txt", OpenParams.Disposition.CREATE, OpenParams.OPTION_DELETE_ON_CLOSE));
 			Assertions.assertInstanceOf(CreateResponse.class, createResp);
+			Assertions.assertTrue(Files.exists(shareRoot.resolve("doomed.txt")));
 
 			var fid = FileId.fromSegment(createResp.segment().asSlice(64, FileId.SIZE));
 			handler.close(buildCloseRequest(fid, false));
 
 			Assertions.assertFalse(Files.exists(shareRoot.resolve("doomed.txt")));
+		}
+
+		@Test
+		@DisplayName("CREATE with FILE_DELETE_ON_CLOSE on a directory with entries succeeds, and CLOSE leaves the directory in place")
+		void deleteOnCloseKeepsNonEmptyDirectory() throws IOException {
+			Files.createDirectory(shareRoot.resolve("full"));
+			Files.createFile(shareRoot.resolve("full/child.txt"));
+
+			var createResp = handler.create(buildCreateRequest("full", OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE | OpenParams.OPTION_DELETE_ON_CLOSE));
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, createResp.header().status());
+			var fid = FileId.fromSegment(createResp.segment().asSlice(64, FileId.SIZE));
+			var closeResp = handler.close(buildCloseRequest(fid, false));
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, closeResp.header().status());
+			Assertions.assertTrue(Files.exists(shareRoot.resolve("full/child.txt")));
 		}
 
 		@Test
