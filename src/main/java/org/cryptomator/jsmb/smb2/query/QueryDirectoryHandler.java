@@ -20,7 +20,7 @@ import java.io.IOException;
  * {@code QUERY_DIRECTORY} populates it, subsequent calls resume from the cursor, and
  * {@code SL_RESTART_SCAN} / {@code SL_REOPEN} force a refetch.
  *
- * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/29e99487-1fa9-4ab0-9f91-3dc1d2d2d898">3.3.5.18 Receiving an SMB2 QUERY_DIRECTORY Request</a>
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/29dfcc9b-3aec-406b-abb5-0b4fe96712e2">3.3.5.18 Receiving an SMB2 QUERY_DIRECTORY Request</a>
  */
 public record QueryDirectoryHandler(Connection connection) {
 

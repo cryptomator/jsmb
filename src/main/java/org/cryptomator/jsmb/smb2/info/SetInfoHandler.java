@@ -8,6 +8,7 @@ import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
 import org.cryptomator.jsmb.smb2.Open;
 import org.cryptomator.jsmb.smb2.PacketHeader;
+import org.cryptomator.jsmb.smb2.PathNames;
 import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.util.Layouts;
 import org.cryptomator.jsmb.util.WinFileTime;
@@ -147,16 +148,22 @@ public record SetInfoHandler(Connection connection) {
 			return NTStatus.STATUS_INFO_LENGTH_MISMATCH;
 		}
 		boolean replaceIfExists = buffer.get(Layouts.BYTE, 0) != 0;
+		long rootDirectory = buffer.get(Layouts.LE_INT64, 8);
 		int nameLength = buffer.get(Layouts.LE_INT32, 16);
-		if (nameLength < 0 || 20L + nameLength > buffer.byteSize()) {
-			return NTStatus.STATUS_INFO_LENGTH_MISMATCH;
+		// MS-FSA 2.1.5.15.12: the name must not be empty or of odd length, nor exceed the buffer. A remote client must neither set RootDirectory nor start the name with a backslash.
+		if (nameLength <= 0 || nameLength % 2 != 0 || 20L + nameLength > buffer.byteSize() || rootDirectory != 0) {
+			return NTStatus.STATUS_INVALID_PARAMETER;
 		}
 		byte[] nameBytes = buffer.asSlice(20, nameLength).toArray(Layouts.BYTE);
-		// The wire format is backslash-delimited and relative to the share root. Backends and Open.path use forward slashes without a leading one.
-		var newPath = new String(nameBytes, StandardCharsets.UTF_16LE).replace('\\', '/');
-		while (newPath.startsWith("/")) {
-			newPath = newPath.substring(1);
+		var newName = new String(nameBytes, StandardCharsets.UTF_16LE);
+		if (newName.startsWith("\\")) {
+			return NTStatus.STATUS_INVALID_PARAMETER;
 		}
+		if (!PathNames.isValid(newName)) {
+			return NTStatus.STATUS_OBJECT_NAME_INVALID; // includes renaming to a named stream, as streams aren't supported
+		}
+		// The wire format is backslash-delimited and relative to the share root. Backends and Open.path use forward slashes.
+		var newPath = PathNames.toBackendPath(newName);
 		open.backend.rename(newPath, replaceIfExists); // a failure is mapped to its status by the caller
 		open.path = newPath; // name and ID queries on this handle are answered from it
 		LOG.debug("SET_INFO fileId={} renamed to '{}' (replace={})", open.fileId, newPath, replaceIfExists);

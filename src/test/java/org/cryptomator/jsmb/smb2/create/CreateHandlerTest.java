@@ -20,6 +20,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -131,6 +134,92 @@ class CreateHandlerTest {
 
 			Assertions.assertInstanceOf(CreateResponse.class, response);
 			Assertions.assertTrue(Files.exists(shareRoot.resolve("sub/file.txt")));
+		}
+
+		@Test
+		@DisplayName("CREATE strips leading, trailing and repeated path separators")
+		void redundantSeparatorsAreStripped() throws IOException {
+			Files.createDirectory(shareRoot.resolve("sub"));
+
+			var response = handler.create(buildCreateRequest("\\sub\\\\dir\\", OpenParams.Disposition.CREATE, OpenParams.OPTION_DIRECTORY_FILE));
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			Assertions.assertTrue(Files.isDirectory(shareRoot.resolve("sub/dir")));
+			Assertions.assertEquals("sub/dir", session.openTable.values().iterator().next().path);
+		}
+
+		@ParameterizedTest(name = "\"{0}\"")
+		@DisplayName("CREATE with a dot directory name or an illegal character in the name returns STATUS_OBJECT_NAME_INVALID")
+		@ValueSource(strings = {"..\\outside.txt", "sub\\..\\..\\outside.txt", ".", "what?.txt", "a/b.txt"})
+		void invalidName(String name) {
+			var response = handler.create(buildCreateRequest(name, OpenParams.Disposition.OPEN_IF, 0));
+
+			Assertions.assertEquals(NTStatus.STATUS_OBJECT_NAME_INVALID, response.header().status());
+			Assertions.assertTrue(session.openTable.isEmpty());
+		}
+
+		@Test
+		@DisplayName("CREATE with a trailing path separator and FILE_NON_DIRECTORY_FILE returns STATUS_OBJECT_NAME_INVALID")
+		void trailingSeparatorOnFile() {
+			var response = handler.create(buildCreateRequest("file.txt\\", OpenParams.Disposition.CREATE, OpenParams.OPTION_NON_DIRECTORY_FILE));
+
+			Assertions.assertEquals(NTStatus.STATUS_OBJECT_NAME_INVALID, response.header().status());
+			Assertions.assertFalse(Files.exists(shareRoot.resolve("file.txt")));
+		}
+
+		@Test
+		@DisplayName("CREATE of a named stream returns STATUS_OBJECT_NAME_NOT_FOUND without creating anything")
+		void namedStream() throws IOException {
+			Files.createFile(shareRoot.resolve("file.txt"));
+
+			var response = handler.create(buildCreateRequest("file.txt:AFP_AfpInfo:$DATA", OpenParams.Disposition.OPEN_IF, 0));
+
+			Assertions.assertEquals(NTStatus.STATUS_OBJECT_NAME_NOT_FOUND, response.header().status());
+			try (var entries = Files.list(shareRoot)) {
+				Assertions.assertEquals(1, entries.count());
+			}
+		}
+
+		@Test
+		@DisplayName("CREATE with FILE_DIRECTORY_FILE and FILE_NON_DIRECTORY_FILE returns STATUS_INVALID_PARAMETER")
+		void contradictingDirectoryOptions() {
+			var response = handler.create(buildCreateRequest("x", OpenParams.Disposition.CREATE, OpenParams.OPTION_DIRECTORY_FILE | OpenParams.OPTION_NON_DIRECTORY_FILE));
+
+			Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+			Assertions.assertFalse(Files.exists(shareRoot.resolve("x")));
+		}
+
+		@ParameterizedTest(name = "{0}")
+		@DisplayName("CREATE with FILE_DIRECTORY_FILE and a disposition that replaces the target returns STATUS_INVALID_PARAMETER")
+		@EnumSource(value = OpenParams.Disposition.class, names = {"SUPERSEDE", "OVERWRITE", "OVERWRITE_IF"})
+		void directoryWithReplacingDisposition(OpenParams.Disposition disposition) {
+			var response = handler.create(buildCreateRequest("dir", disposition, OpenParams.OPTION_DIRECTORY_FILE));
+
+			Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+			Assertions.assertFalse(Files.exists(shareRoot.resolve("dir")));
+		}
+
+		@ParameterizedTest(name = "CreateOptions = {0}")
+		@DisplayName("CREATE with FILE_OPEN_BY_FILE_ID or FILE_RESERVE_OPFILTER returns STATUS_NOT_SUPPORTED")
+		@ValueSource(ints = {0x00002000, 0x00100000})
+		void unsupportedOption(int createOptions) {
+			var response = handler.create(buildCreateRequest("x", OpenParams.Disposition.CREATE, createOptions));
+
+			Assertions.assertEquals(NTStatus.STATUS_NOT_SUPPORTED, response.header().status());
+			Assertions.assertFalse(Files.exists(shareRoot.resolve("x")));
+		}
+
+		@ParameterizedTest(name = "DesiredAccess = {0}")
+		@DisplayName("CREATE with no DesiredAccess or one with reserved bits returns STATUS_ACCESS_DENIED")
+		@ValueSource(ints = {0, 0x00120089 | 0x00000200, 0x00120089 | 0x04000000})
+		void invalidDesiredAccess(int desiredAccess) {
+			var request = buildCreateRequest("x", OpenParams.Disposition.CREATE, 0);
+			request.segment().set(Layouts.LE_INT32, 24, desiredAccess);
+
+			var response = handler.create(request);
+
+			Assertions.assertEquals(NTStatus.STATUS_ACCESS_DENIED, response.header().status());
+			Assertions.assertFalse(Files.exists(shareRoot.resolve("x")));
 		}
 
 		@Test

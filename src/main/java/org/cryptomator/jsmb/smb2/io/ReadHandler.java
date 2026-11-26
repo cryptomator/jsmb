@@ -18,7 +18,7 @@ import java.nio.ByteBuffer;
  * caps the returned length at {@link Connection#maxReadSize} — honoring the server-advertised ceiling is how clients
  * know not to ask for more. {@code STATUS_END_OF_FILE} when {@code Offset >= EndOfFile}.
  *
- * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/21e8b343-34b2-4c0e-98c1-f22b8f3d654b">3.3.5.12 Receiving an SMB2 READ Request</a>
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/21e8b343-34e9-4fca-8d93-03dd2d3e961e">3.3.5.12 Receiving an SMB2 READ Request</a>
  */
 public record ReadHandler(Connection connection) {
 

@@ -12,6 +12,7 @@ import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.ErrorResponse;
 import org.cryptomator.jsmb.smb2.Open;
 import org.cryptomator.jsmb.smb2.PacketHeader;
+import org.cryptomator.jsmb.smb2.PathNames;
 import org.cryptomator.jsmb.smb2.SMB2Message;
 import org.cryptomator.jsmb.util.WinFileTime;
 import org.slf4j.Logger;
@@ -23,7 +24,7 @@ import java.util.List;
 /**
  * Handles {@code CREATE} and {@code CLOSE} for SMB 3.1.1.
  *
- * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/d166aa9e-0b53-410e-b35e-3933d8131927">3.3.5.9 Receiving an SMB2 CREATE Request</a>
+ * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/8c61e928-9242-44ed-96a0-98d1032d0d39">3.3.5.9 Receiving an SMB2 CREATE Request</a>
  * @see <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/cfd45bd7-3b03-4df8-bfce-b9f7d1ce5cf0">3.3.5.10 Receiving an SMB2 CLOSE Request</a>
  */
 public record CreateHandler(Connection connection) {
@@ -44,13 +45,17 @@ public record CreateHandler(Connection connection) {
 			return ErrorResponse.create(request, NTStatus.STATUS_OBJECT_NAME_NOT_FOUND);
 		}
 
-		var name = request.name().replace('\\', '/');
 		OpenParams.Disposition disposition;
 		try {
 			disposition = OpenParams.Disposition.fromWireValue(request.createDisposition());
 		} catch (IllegalArgumentException e) {
 			return ErrorResponse.create(request, NTStatus.STATUS_INVALID_PARAMETER);
 		}
+		int validity = validate(request, disposition);
+		if (validity != NTStatus.STATUS_SUCCESS) {
+			return ErrorResponse.create(request, validity);
+		}
+		var name = PathNames.toBackendPath(request.name());
 		var params = new OpenParams(request.desiredAccess(), request.shareAccess(), disposition, request.createOptions());
 
 		SmbOpen backend;
@@ -117,6 +122,44 @@ public record CreateHandler(Connection connection) {
 
 	/** {@code FILE_ALL_ACCESS} — full generic access mask. MS-DTYP 2.4.3. */
 	private static final int FILE_ALL_ACCESS = 0x001F01FF;
+
+	private static final int OPTION_OPEN_BY_FILE_ID = 0x00002000;
+	private static final int OPTION_RESERVE_OPFILTER = 0x00100000;
+	private static final int DIRECTORY_OPTIONS = OpenParams.OPTION_DIRECTORY_FILE | OpenParams.OPTION_NON_DIRECTORY_FILE;
+	private static final int RESERVED_ACCESS_BITS = 0x0CE0FE00;
+
+	// The checks of a CREATE request that need no look at the share: MS-SMB2 2.2.13 for the options, MS-FSA 2.1.5.1 phase 1 for the rest. Yields the status to fail the request with.
+	private static int validate(CreateRequest request, OpenParams.Disposition disposition) {
+		int options = request.createOptions();
+		if ((options & (OPTION_OPEN_BY_FILE_ID | OPTION_RESERVE_OPFILTER)) != 0) {
+			return NTStatus.STATUS_NOT_SUPPORTED;
+		}
+		if ((options & DIRECTORY_OPTIONS) == DIRECTORY_OPTIONS) {
+			return NTStatus.STATUS_INVALID_PARAMETER;
+		}
+		boolean directory = (options & OpenParams.OPTION_DIRECTORY_FILE) != 0;
+		boolean directoryDisposition = switch (disposition) {
+			case CREATE, OPEN, OPEN_IF -> true;
+			case SUPERSEDE, OVERWRITE, OVERWRITE_IF -> false;
+		};
+		if (directory && !directoryDisposition) {
+			return NTStatus.STATUS_INVALID_PARAMETER;
+		}
+		if (request.desiredAccess() == 0 || (request.desiredAccess() & RESERVED_ACCESS_BITS) != 0) {
+			return NTStatus.STATUS_ACCESS_DENIED;
+		}
+		var name = request.name();
+		if (PathNames.referencesStream(name)) {
+			return NTStatus.STATUS_OBJECT_NAME_NOT_FOUND; // named streams aren't supported, so there is none to be found
+		}
+		if (!PathNames.isValid(name)) {
+			return NTStatus.STATUS_OBJECT_NAME_INVALID;
+		}
+		if (PathNames.hasTrailingSeparator(name) && (options & OpenParams.OPTION_NON_DIRECTORY_FILE) != 0) {
+			return NTStatus.STATUS_OBJECT_NAME_INVALID;
+		}
+		return NTStatus.STATUS_SUCCESS;
+	}
 
 	public SMB2Message close(CloseRequest request) {
 		var session = connection.sessionTable.get(request.header().sessionId());

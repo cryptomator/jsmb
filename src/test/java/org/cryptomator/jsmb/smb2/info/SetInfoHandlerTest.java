@@ -126,17 +126,10 @@ class SetInfoHandlerTest {
 
 	@Test
 	@DisplayName("FileRenameInformation moves the target and updates the backend's path")
-	void renameFile() throws IOException {
+	void renameFile() {
 		String newName = "renamed.bin";
-		byte[] nameBytes = newName.getBytes(StandardCharsets.UTF_16LE);
-		byte[] payload = new byte[20 + nameBytes.length];
-		payload[0] = 1; // ReplaceIfExists
-		// bytes 1-7 Reserved, 8-15 RootDirectory, 16-19 FileNameLength (LE int32)
-		var seg = MemorySegment.ofArray(payload);
-		seg.set(Layouts.LE_INT32, 16, nameBytes.length);
-		System.arraycopy(nameBytes, 0, payload, 20, nameBytes.length);
 
-		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, payload));
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, renamePayload(newName, true)));
 
 		Assertions.assertInstanceOf(SetInfoResponse.class, response);
 		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
@@ -149,12 +142,8 @@ class SetInfoHandlerTest {
 	@DisplayName("FileRenameInformation with a backslash-delimited target updates the open's path, forward-slash delimited")
 	void renameIntoSubdirectory() throws IOException {
 		Files.createDirectory(shareRoot.resolve("sub"));
-		byte[] nameBytes = "\\sub\\renamed.bin".getBytes(StandardCharsets.UTF_16LE);
-		byte[] payload = new byte[20 + nameBytes.length];
-		MemorySegment.ofArray(payload).set(Layouts.LE_INT32, 16, nameBytes.length);
-		System.arraycopy(nameBytes, 0, payload, 20, nameBytes.length);
 
-		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, payload));
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, renamePayload("sub\\renamed.bin", false)));
 
 		Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
 		Assertions.assertTrue(Files.exists(shareRoot.resolve("sub/renamed.bin")));
@@ -165,18 +154,65 @@ class SetInfoHandlerTest {
 	@DisplayName("FileRenameInformation to an existing name without ReplaceIfExists returns STATUS_OBJECT_NAME_COLLISION")
 	void renameCollision() throws IOException {
 		Files.createFile(shareRoot.resolve("existing.bin"));
-		String newName = "existing.bin";
-		byte[] nameBytes = newName.getBytes(StandardCharsets.UTF_16LE);
-		byte[] payload = new byte[20 + nameBytes.length];
-		payload[0] = 0; // ReplaceIfExists = false
-		var seg = MemorySegment.ofArray(payload);
-		seg.set(Layouts.LE_INT32, 16, nameBytes.length);
-		System.arraycopy(nameBytes, 0, payload, 20, nameBytes.length);
 
-		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, payload));
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, renamePayload("existing.bin", false)));
 
 		Assertions.assertInstanceOf(ErrorResponse.class, response);
 		Assertions.assertEquals(NTStatus.STATUS_OBJECT_NAME_COLLISION, response.header().status());
+	}
+
+	@ParameterizedTest(name = "\"{0}\"")
+	@DisplayName("FileRenameInformation with a dot directory name, an illegal character or a stream name in the target returns STATUS_OBJECT_NAME_INVALID")
+	@ValueSource(strings = {"..\\outside.bin", "sub\\..\\..\\outside.bin", "what?.bin", "target.bin:stream"})
+	void renameToInvalidName(String newName) {
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, renamePayload(newName, true)));
+
+		Assertions.assertEquals(NTStatus.STATUS_OBJECT_NAME_INVALID, response.header().status());
+		Assertions.assertTrue(Files.exists(targetFile));
+	}
+
+	@Test
+	@DisplayName("FileRenameInformation with a target that starts with a backslash returns STATUS_INVALID_PARAMETER")
+	void renameToAbsoluteName() {
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, renamePayload("\\renamed.bin", true)));
+
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+		Assertions.assertTrue(Files.exists(targetFile));
+	}
+
+	@Test
+	@DisplayName("FileRenameInformation with a RootDirectory returns STATUS_INVALID_PARAMETER")
+	void renameWithRootDirectory() {
+		byte[] payload = renamePayload("renamed.bin", true);
+		MemorySegment.ofArray(payload).set(Layouts.LE_INT64, 8, 0x42L);
+
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, payload));
+
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+		Assertions.assertTrue(Files.exists(targetFile));
+	}
+
+	@ParameterizedTest(name = "FileNameLength = {0}")
+	@DisplayName("FileRenameInformation with an empty, odd or overlong FileNameLength returns STATUS_INVALID_PARAMETER")
+	@ValueSource(ints = {0, 21, 24})
+	void renameWithInvalidNameLength(int nameLength) {
+		byte[] payload = renamePayload("renamed.bin", true); // 22 bytes of name
+		MemorySegment.ofArray(payload).set(Layouts.LE_INT32, 16, nameLength);
+
+		var response = handler.set(buildRequest(SetInfoRequest.INFO_TYPE_FILE, (byte) 10, payload));
+
+		Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
+		Assertions.assertTrue(Files.exists(targetFile));
+	}
+
+	// MS-FSCC 2.4.37.2: ReplaceIfExists (1), Reserved (7), RootDirectory (8), FileNameLength (4), FileName
+	private static byte[] renamePayload(String newName, boolean replaceIfExists) {
+		byte[] nameBytes = newName.getBytes(StandardCharsets.UTF_16LE);
+		byte[] payload = new byte[20 + nameBytes.length];
+		payload[0] = (byte) (replaceIfExists ? 1 : 0);
+		MemorySegment.ofArray(payload).set(Layouts.LE_INT32, 16, nameBytes.length);
+		System.arraycopy(nameBytes, 0, payload, 20, nameBytes.length);
+		return payload;
 	}
 
 	@Test

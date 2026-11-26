@@ -19,7 +19,10 @@ public record CreateRequest(PacketHeader header, MemorySegment segment) implemen
 
 	@Override
 	public boolean isWellFormed() {
+		// 3.3.5.9: NameLength must be a multiple of 2, and NameOffset must not lie before the Buffer field. An empty name is exempt from the latter, as the offset of an empty field carries no meaning.
 		return SMB2Message.hasStructure(segment, 57) //
+				&& nameLength() % 2 == 0 //
+				&& (nameLength() == 0 || nameOffset() >= PacketHeader.STRUCTURE_SIZE + 56) //
 				&& SMB2Message.containsBuffer(segment, nameOffset(), nameLength()) //
 				&& SMB2Message.containsBuffer(segment, Integer.toUnsignedLong(createContextsOffset()), Integer.toUnsignedLong(createContextsLength()));
 	}

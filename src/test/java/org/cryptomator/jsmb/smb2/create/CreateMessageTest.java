@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
@@ -65,6 +67,26 @@ class CreateMessageTest {
 			var body = new byte[56];
 			MemorySegment.ofArray(body).set(Layouts.LE_UINT16, 0, (char) 57);
 			Assertions.assertEquals("", new CreateRequest(null, MemorySegment.ofArray(body)).name());
+		}
+
+		@ParameterizedTest(name = "NameOffset = {0}, NameLength = {1} → {2}")
+		@DisplayName("isWellFormed() takes a NameLength that is a multiple of 2 and a NameOffset that doesn't lie before the Buffer field")
+		@CsvSource({
+				"120, 8, true",
+				"120, 7, false", // odd
+				"118, 8, false", // starts within the fixed part
+				"122, 8, false", // extends beyond the message
+				"0, 0, true", // nothing to locate
+		})
+		void wellFormedName(int nameOffset, int nameLength, boolean expected) {
+			var seg = MemorySegment.ofArray(new byte[56 + 8]);
+			seg.set(Layouts.LE_UINT16, 0, (char) 57);
+			seg.set(Layouts.LE_UINT16, 44, (char) nameOffset);
+			seg.set(Layouts.LE_UINT16, 46, (char) nameLength);
+
+			boolean wellFormed = new CreateRequest(null, seg).isWellFormed();
+
+			Assertions.assertEquals(expected, wellFormed);
 		}
 	}
 
