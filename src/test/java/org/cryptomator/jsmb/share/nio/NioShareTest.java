@@ -22,12 +22,12 @@ import java.nio.file.Path;
 
 class NioShareTest {
 
-	private static final OpenParams OPEN_READWRITE = new OpenParams(0, 0, OpenParams.Disposition.OPEN, 0);
-	private static final OpenParams CREATE_FILE = new OpenParams(0, 0, OpenParams.Disposition.CREATE, 0);
-	private static final OpenParams CREATE_DIR = new OpenParams(0, 0, OpenParams.Disposition.CREATE, OpenParams.OPTION_DIRECTORY_FILE);
-	private static final OpenParams OPEN_IF_FILE = new OpenParams(0, 0, OpenParams.Disposition.OPEN_IF, 0);
-	private static final OpenParams OPEN_IF_DIR = new OpenParams(0, 0, OpenParams.Disposition.OPEN_IF, OpenParams.OPTION_DIRECTORY_FILE);
-	private static final OpenParams OVERWRITE_IF = new OpenParams(0, 0, OpenParams.Disposition.OVERWRITE_IF, 0);
+	private static final OpenParams OPEN_READWRITE = new OpenParams(0, 0, OpenParams.Disposition.OPEN, 0, 0);
+	private static final OpenParams CREATE_FILE = new OpenParams(0, 0, OpenParams.Disposition.CREATE, 0, 0);
+	private static final OpenParams CREATE_DIR = new OpenParams(0, 0, OpenParams.Disposition.CREATE, OpenParams.OPTION_DIRECTORY_FILE, 0);
+	private static final OpenParams OPEN_IF_FILE = new OpenParams(0, 0, OpenParams.Disposition.OPEN_IF, 0, 0);
+	private static final OpenParams OPEN_IF_DIR = new OpenParams(0, 0, OpenParams.Disposition.OPEN_IF, OpenParams.OPTION_DIRECTORY_FILE, 0);
+	private static final OpenParams OVERWRITE_IF = new OpenParams(0, 0, OpenParams.Disposition.OVERWRITE_IF, 0, 0);
 
 	@Nested
 	@DisplayName("open")

@@ -57,7 +57,7 @@ public record CreateHandler(Connection connection) {
 			return ErrorResponse.create(request, validity);
 		}
 		var name = PathNames.toBackendPath(request.name());
-		var params = new OpenParams(request.desiredAccess(), request.shareAccess(), disposition, request.createOptions());
+		var params = new OpenParams(request.desiredAccess(), request.shareAccess(), disposition, request.createOptions(), request.fileAttributes());
 
 		SmbOpen backend;
 		try {

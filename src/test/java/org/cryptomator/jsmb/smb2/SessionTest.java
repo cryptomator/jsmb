@@ -38,7 +38,7 @@ class SessionTest {
 		session.treeConnectTable.put(1, treeConnect);
 		// closing the backend handle is what carries out the pending deletion, which makes it observable
 		Files.writeString(shareRoot.resolve("pending.txt"), "content");
-		var backend = share.open("pending.txt", new OpenParams(0x00130089, 0x00000007, OpenParams.Disposition.OPEN, 0));
+		var backend = share.open("pending.txt", new OpenParams(0x00130089, 0x00000007, OpenParams.Disposition.OPEN, 0, 0));
 		backend.setDeletePending(true);
 		session.openTable.put(backend.fileId(), new Open(backend.fileId(), backend, session, treeConnect, "pending.txt", 0, AccessMask.FILE_ALL_ACCESS));
 

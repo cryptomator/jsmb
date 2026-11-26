@@ -3,7 +3,12 @@ package org.cryptomator.jsmb.smb2.create;
 import org.cryptomator.jsmb.Config;
 import org.cryptomator.jsmb.Credentials;
 import org.cryptomator.jsmb.common.NTStatus;
+import org.cryptomator.jsmb.share.FileBasicInfo;
+import org.cryptomator.jsmb.share.FsAttributes;
+import org.cryptomator.jsmb.share.FsSize;
 import org.cryptomator.jsmb.share.OpenParams;
+import org.cryptomator.jsmb.share.SmbOpen;
+import org.cryptomator.jsmb.share.SmbShare;
 import org.cryptomator.jsmb.share.nio.NioShare;
 import org.cryptomator.jsmb.smb2.AccessMask;
 import org.cryptomator.jsmb.smb2.Command;
@@ -30,6 +35,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicReference;
 
 class CreateHandlerTest {
 
@@ -259,6 +265,38 @@ class CreateHandlerTest {
 
 			Assertions.assertEquals(NTStatus.STATUS_INVALID_PARAMETER, response.header().status());
 			Assertions.assertFalse(Files.exists(shareRoot.resolve("doomed.txt")));
+		}
+
+		@Test
+		@DisplayName("CREATE passes the FileAttributes of the request on to the backend")
+		void fileAttributesReachBackend() {
+			var seenParams = new AtomicReference<OpenParams>();
+			var recordingShare = new SmbShare() {
+				@Override
+				public SmbOpen open(String path, OpenParams params) throws IOException {
+					seenParams.set(params);
+					return share.open(path, params);
+				}
+
+				@Override
+				public FsAttributes fsAttributes() {
+					return share.fsAttributes();
+				}
+
+				@Override
+				public FsSize fsSize() throws IOException {
+					return share.fsSize();
+				}
+			};
+			int treeId = session.nextTreeId.getAndIncrement();
+			session.treeConnectTable.put(treeId, new TreeConnect(treeId, "recording", recordingShare, AccessMask.FILE_ALL_ACCESS));
+			var request = buildCreateRequestOn(treeId, "hidden.txt", OpenParams.Disposition.CREATE, 0);
+			request.segment().set(Layouts.LE_INT32, 28, FileBasicInfo.ATTR_HIDDEN | FileBasicInfo.ATTR_READONLY);
+
+			var response = handler.create(request);
+
+			Assertions.assertEquals(NTStatus.STATUS_SUCCESS, response.header().status());
+			Assertions.assertEquals(FileBasicInfo.ATTR_HIDDEN | FileBasicInfo.ATTR_READONLY, seenParams.get().fileAttributes());
 		}
 
 		@Test

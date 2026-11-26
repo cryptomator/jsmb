@@ -58,7 +58,7 @@ class WriteHandlerTest {
 		Files.createFile(targetFile);
 		// DesiredAccess FILE_WRITE_DATA (0x0002) | FILE_READ_DATA (0x0001); share all; OPEN disposition.
 		SmbOpen backend = share.open("out.bin",
-				new OpenParams(0x00120003, 0x00000007, OpenParams.Disposition.OPEN, 0));
+				new OpenParams(0x00120003, 0x00000007, OpenParams.Disposition.OPEN, 0, 0));
 		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "out.bin", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(fileOpen.fileId, fileOpen);
 	}
@@ -169,7 +169,7 @@ class WriteHandlerTest {
 	@Test
 	@DisplayName("FLUSH against a directory handle returns a FlushResponse")
 	void flushDirectoryHandle() throws IOException {
-		var backend = treeConnect.share().open("", new OpenParams(0, 0, OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE));
+		var backend = treeConnect.share().open("", new OpenParams(0, 0, OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE, 0));
 		var directoryOpen = new Open(backend.fileId(), backend, session, treeConnect, "", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(directoryOpen.fileId, directoryOpen);
 

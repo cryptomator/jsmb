@@ -174,7 +174,7 @@ class TreeConnectHandlerTest {
 
 	private Open openForDeletion(NioShare nioShare, Path shareRoot, String name, TreeConnect treeConnect) throws IOException {
 		Files.writeString(shareRoot.resolve(name), "content");
-		var backend = nioShare.open(name, new OpenParams(0x00130089, 0x00000007, OpenParams.Disposition.OPEN, 0));
+		var backend = nioShare.open(name, new OpenParams(0x00130089, 0x00000007, OpenParams.Disposition.OPEN, 0, 0));
 		backend.setDeletePending(true);
 		var open = new Open(backend.fileId(), backend, session, treeConnect, name, 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(open.fileId, open);

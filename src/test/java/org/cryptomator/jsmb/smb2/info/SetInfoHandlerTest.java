@@ -63,7 +63,7 @@ class SetInfoHandlerTest {
 		Files.writeString(targetFile, "content");
 		// DELETE | WRITE_DATA — needed for delete and rename
 		SmbOpen backend = share.open("target.bin",
-				new OpenParams(0x00130196, 0x00000007, OpenParams.Disposition.OPEN, 0));
+				new OpenParams(0x00130196, 0x00000007, OpenParams.Disposition.OPEN, 0, 0));
 		fileOpen = new Open(backend.fileId(), backend, session, treeConnect, "target.bin", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(fileOpen.fileId, fileOpen);
 	}
@@ -136,7 +136,7 @@ class SetInfoHandlerTest {
 	void dispositionDeleteNonEmptyDirectory() throws IOException {
 		Files.createDirectory(shareRoot.resolve("full"));
 		Files.createFile(shareRoot.resolve("full/child.txt"));
-		SmbOpen backend = treeConnect.share().open("full", new OpenParams(0x00110081, 0x00000007, OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE));
+		SmbOpen backend = treeConnect.share().open("full", new OpenParams(0x00110081, 0x00000007, OpenParams.Disposition.OPEN, OpenParams.OPTION_DIRECTORY_FILE, 0));
 		var directoryOpen = new Open(backend.fileId(), backend, session, treeConnect, "full", 0, AccessMask.FILE_ALL_ACCESS);
 		session.openTable.put(directoryOpen.fileId, directoryOpen);
 

@@ -1,19 +1,22 @@
 package org.cryptomator.jsmb.share;
 
 /**
- * Parameters the embedder needs to satisfy an {@code SMB2 CREATE} request. The four bitfields come
+ * Parameters the embedder needs to satisfy an {@code SMB2 CREATE} request. The bitfields come
  * straight from the wire format (MS-SMB2 2.2.13); {@link Disposition} is a typed projection of the
  * {@code CreateDisposition} u32.
  *
- * @param desiredAccess NT access mask (e.g. {@code FILE_READ_DATA | FILE_WRITE_DATA})
- * @param shareAccess   NT share-access bitfield ({@code FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE})
- * @param disposition   how to handle an existing / missing target
- * @param createOptions NT {@code CreateOptions} bitfield (e.g. {@code FILE_DIRECTORY_FILE}, {@code FILE_DELETE_ON_CLOSE})
+ * @param desiredAccess  NT access mask (e.g. {@code FILE_READ_DATA | FILE_WRITE_DATA})
+ * @param shareAccess    NT share-access bitfield ({@code FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE})
+ * @param disposition    how to handle an existing / missing target
+ * @param createOptions  NT {@code CreateOptions} bitfield (e.g. {@code FILE_DIRECTORY_FILE}, {@code FILE_DELETE_ON_CLOSE})
+ * @param fileAttributes the attributes to give a target that gets created or replaced, as {@code ATTR_*} bits of {@link FileBasicInfo} (MS-FSCC 2.6).
+ *                       A backend that can't store an attribute is free to ignore it.
  */
 public record OpenParams(int desiredAccess,
 						 int shareAccess,
 						 Disposition disposition,
-						 int createOptions) {
+						 int createOptions,
+						 int fileAttributes) {
 
 	/**
 	 * Typed projection of the {@code CreateDisposition} u32 — how the server should react when the target

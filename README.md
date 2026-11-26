@@ -60,6 +60,12 @@ SMB2 messages are **not** deserialised into POJOs. Records like `PacketHeader`, 
 
 Embedders plug a filesystem-like backend in via the `SmbShare` / `SmbOpen` interfaces, with value records `FileBasicInfo`, `FileStandardInfo`, `DirEntry`, `FsAttributes`, `FsSize`, and `OpenParams` (with a `Disposition` enum that mirrors MS-SMB2 2.2.13's `CreateDisposition`). The SPI talks about paths, bytes, and basic metadata only — it doesn't leak SMB concepts. SMB2 command handlers translate NT access masks / share modes / dispositions / options into SPI calls and map the `IOException` of any SPI method to a `STATUS_*` code through `NTStatus.of(IOException)`: `java.nio.file` exceptions (`NoSuchFileException`, `FileAlreadyExistsException`, `AccessDeniedException`, `NotDirectoryException`, `DirectoryNotEmptyException`) have a status of their own, a generic `IOException` becomes `STATUS_UNEXPECTED_IO_ERROR`, and a backend that needs to report anything else (sharing violation, disk full, …) throws `share.IOExceptionWithStatus`.
 
+What the server takes care of before a backend gets called:
+
+- **Path names.** `smb2.PathNames` rejects names with `.` or `..` components or with characters that are illegal in a file name (MS-FSCC 2.1.5), for `CREATE` as well as for rename targets. A backend only ever sees forward-slash delimited paths relative to the share root, without leading, trailing or repeated separators. Named streams (`file:stream`) aren't supported and never reach a backend.
+- **Access rights.** `CREATE` turns the `DesiredAccess` into `Open.grantedAccess` (`smb2.AccessMask`), and `READ`, `WRITE`, `QUERY_DIRECTORY`, `QUERY_INFO` and `SET_INFO` are checked against it. There are no ACLs: whatever a client asks for is granted, but it is held to what it asked for.
+- **Delete on close.** `FILE_DELETE_ON_CLOSE` is kept in `Open.createOptions` and turned into `SmbOpen.setDeletePending(true)` right before the open is closed. A backend's refusal at that point is ignored, as closing can't fail (MS-FSA 2.1.5.5).
+
 ### Negotiate contexts
 
 `smb2.negotiate.*` holds the SMB 3.1.1 negotiate contexts (preauth integrity, encryption, compression, signing, RDMA, transport). `NegotiateRequest.negotiateContext(Class)` looks up a context by type; the server responds with matching contexts only if the client included them.
