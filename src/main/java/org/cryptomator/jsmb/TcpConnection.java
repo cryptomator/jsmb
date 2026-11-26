@@ -11,7 +11,6 @@ import org.cryptomator.jsmb.smb2.Command;
 import org.cryptomator.jsmb.smb2.CompoundChain;
 import org.cryptomator.jsmb.smb2.Connection;
 import org.cryptomator.jsmb.smb2.Dialects;
-import org.cryptomator.jsmb.share.FileId;
 import org.cryptomator.jsmb.smb2.FileIdCarrying;
 import org.cryptomator.jsmb.smb2.LogoffRequest;
 import org.cryptomator.jsmb.smb2.NegotiateRequest;
@@ -27,7 +26,6 @@ import org.cryptomator.jsmb.smb2.UnhandledRequest;
 import org.cryptomator.jsmb.smb2.create.CloseRequest;
 import org.cryptomator.jsmb.smb2.create.CreateHandler;
 import org.cryptomator.jsmb.smb2.create.CreateRequest;
-import org.cryptomator.jsmb.smb2.create.CreateResponse;
 import org.cryptomator.jsmb.smb2.echo.CancelRequest;
 import org.cryptomator.jsmb.smb2.echo.EchoRequest;
 import org.cryptomator.jsmb.smb2.notify.ChangeNotifyRequest;
@@ -209,9 +207,14 @@ class TcpConnection implements Runnable {
 		int offset = 0;
 		int nextCommand;
 		var chain = new CompoundChain();
-		FileId chainedFileId = null;
+		int commands = 0;
+		int relatedCommands = 0;
 		do {
 			var msg = SMB2MessageParser.parse(segment.asSlice(offset));
+			commands++;
+			if (msg.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS)) {
+				relatedCommands++;
+			}
 			// Verifying the Connection State: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/4daf7dce-9f49-4413-99bf-323801c9283d
 			if (!(msg instanceof NegotiateRequest) && (connection.negotiateDialect == Dialects.NONE || connection.negotiateDialect == Dialects.SMB2_WILDCARD)) {
 				throw new DisconnectException("Request on a connection that hasn't negotiated a dialect yet");
@@ -236,6 +239,9 @@ class TcpConnection implements Runnable {
 			var sessionId = chain.sessionId(msg);
 			var treeId = chain.treeId(msg);
 			var rejection = requestVerifier.verify(msg, sessionId, treeId, transformSessionId);
+			if (rejection.isEmpty()) {
+				rejection = chain.fileIdRejection(msg);
+			}
 			// Only now make a related request say what it is processed with: its signature had to be verified over the bytes as sent.
 			if (msg.header().hasFlag(SMB2Message.Flags.RELATED_OPERATIONS)) {
 				if (sessionId != null) {
@@ -244,8 +250,8 @@ class TcpConnection implements Runnable {
 				if (treeId != null) {
 					msg.header().treeId(treeId);
 				}
-				if (rejection.isEmpty() && msg instanceof FileIdCarrying msgWithFile && chainedFileId != null) { // the body of a rejected request may be too short to hold a FileId
-					msgWithFile.substituteFileIdIfSentinel(chainedFileId);
+				if (rejection.isEmpty() && msg instanceof FileIdCarrying msgWithFile) { // the body of a rejected request may be too short to hold a FileId
+					msgWithFile.fileId(chain.fileId()); // there is one, or else the request would have been rejected
 				}
 			}
 			// looked up before dispatching, as a LOGOFF response still has to be signed or encrypted with the keys of the session it just removed
@@ -271,9 +277,6 @@ class TcpConnection implements Runnable {
 				// CANCEL emits no response; later elements of a compound chain still need theirs, so continue.
 				continue;
 			}
-			if (response instanceof CreateResponse cr) {
-				chainedFileId = cr.fileId();
-			}
 			if (response.header().status() != NTStatus.STATUS_SUCCESS) {
 				// the one place where every refusal shows up, whichever check or handler it stems from
 				LOG.debug("Command 0x{} (messageId={}) answered with status 0x{}", Integer.toHexString(msg.header().command()), msg.header().messageId(), Integer.toHexString(response.header().status()));
@@ -283,6 +286,9 @@ class TcpConnection implements Runnable {
 			var signed = sign(msg, credited, session);
 			writeWire(maybeEncrypt(signed, requestEncrypted, session));
 		} while (nextCommand != 0);
+		if (commands > 1) {
+			LOG.debug("Compounded request of {} commands, {} of them related", commands, relatedCommands);
+		}
 	}
 
 	// The session whose keys protect a response: the one named in its header (which SESSION_SETUP may just have created) or, if that one is gone by now, the one the request was processed with.
